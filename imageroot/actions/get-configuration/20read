@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import sys
+import os
+import agent
+from agent.ldapproxy import Ldapproxy
+
+config = {}
+
+env = dict(os.environ)
+if os.path.exists("environment"):
+    try:
+        env.update(agent.read_envfile("environment"))
+    except Exception:
+        pass
+
+try:
+    ldap_sync_interval = int(env.get("LDAP_SYNC_INTERVAL") or 3600)
+except ValueError:
+    ldap_sync_interval = 3600
+
+config["host"] = env.get("HOST", "")
+config["http2https"] = env.get("HTTP2HTTPS", "True") == "True"
+config["lets_encrypt"] = env.get("LETS_ENCRYPT", "False") == "True"
+config["admin_enabled"] = env.get("ADMIN_ENABLED", "True") == "True"
+config["has_admin_password"] = bool(env.get("ADMIN_PASSWORD", ""))
+config["signups_allowed"] = env.get("SIGNUPS_ALLOWED", "False") == "True"
+config["signups_verify"] = env.get("SIGNUPS_VERIFY", "False") == "True"
+config["signups_domains_whitelist"] = env.get("SIGNUPS_DOMAINS_WHITELIST", "")
+config["invitations_allowed"] = env.get("INVITATIONS_ALLOWED", "True") == "True"
+config["show_password_hint"] = env.get("SHOW_PASSWORD_HINT", "False") == "True"
+config["sends_allowed"] = env.get("SENDS_ALLOWED", "True") == "True"
+config["emergency_access_allowed"] = env.get("EMERGENCY_ACCESS_ALLOWED", "True") == "True"
+config["org_events_enabled"] = env.get("ORG_EVENTS_ENABLED", "False") == "True"
+config["smtp_from"] = env.get("SMTP_FROM", "")
+config["ldap_domain"] = env.get("LDAP_DOMAIN", "")
+config["ldap_sync_interval"] = ldap_sync_interval
+config["ldap_search_filter"] = env.get("LDAP_SEARCH_FILTER", "")
+config["push_enabled"] = env.get("PUSH_ENABLED", "False") == "True"
+config["push_installation_id"] = env.get("PUSH_INSTALLATION_ID", "")
+config["push_installation_key"] = env.get("PUSH_INSTALLATION_KEY", "")
+config["push_relay_uri"] = env.get("PUSH_RELAY_URI", "https://push.bitwarden.com")
+config["configured"] = bool(config["host"])
+
+smarthost_enabled = False
+smarthost_host = ""
+try:
+    rdb = agent.redis_connect(use_replica=True)
+    smtp_settings = agent.get_smarthost_settings(rdb) or {}
+    smarthost_enabled = bool(smtp_settings.get("enabled") and smtp_settings.get("host"))
+    smarthost_host = str(smtp_settings.get("host") or "")
+except Exception:
+    pass
+
+config["smarthost_enabled"] = smarthost_enabled
+config["smarthost_host"] = smarthost_host
+
+domains = []
+try:
+    lp = Ldapproxy()
+    for key in lp.get_domains_list():
+        domains.append({
+            "name": key,
+            "label": key,
+            "value": key,
+        })
+except Exception:
+    pass
+
+config["ldap_domain_list"] = domains
+
+json.dump(config, fp=sys.stdout)

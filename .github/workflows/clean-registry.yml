@@ -1,0 +1,19 @@
+name: "Clean up registry"
+
+on:
+  delete:
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  delete_images:
+    if: github.event.ref != 'repomd'
+    name: "Delete ghcr.io images ${{ github.event.ref }}"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: NethServer/ns8-github-actions/.github/actions/delete-image@v1
+        with:
+          images: "vaultwarden"
+          delete_image_token: ${{ secrets.GITHUB_TOKEN }}

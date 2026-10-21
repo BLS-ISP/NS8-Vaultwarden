@@ -1,0 +1,24 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+set -e
+
+# Redirect any output to the journal (stderr)
+exec 1>&2
+
+systemctl --user daemon-reload
+
+# Start or restart Vaultwarden Pod and Server
+systemctl --user enable vaultwarden.service vaultwarden-app.service
+systemctl --user restart vaultwarden.service
+
+if [[ -n "${LDAP_DOMAIN}" ]]; then
+    systemctl --user enable vaultwarden-ldap.service
+    systemctl --user restart vaultwarden-ldap.service
+else
+    systemctl --user disable --now vaultwarden-ldap.service 2>/dev/null || true
+fi

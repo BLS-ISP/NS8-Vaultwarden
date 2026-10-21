@@ -1,0 +1,122 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Configure vaultwarden",
+    "$id": "http://nethserver.org/json-schema/task/input/vaultwarden/configure",
+    "description": "Configure Vaultwarden instance",
+    "examples": [
+        {
+            "host": "vault.nethserver.org",
+            "http2https": true,
+            "lets_encrypt": true,
+            "admin_enabled": true,
+            "signups_allowed": false,
+            "invitations_allowed": true
+        }
+    ],
+    "type": "object",
+    "required": [
+        "host",
+        "http2https",
+        "lets_encrypt"
+    ],
+    "properties": {
+        "host": {
+            "type": "string",
+            "description": "Host name for Vaultwarden, like 'vault.nethserver.org'",
+            "format": "hostname",
+            "pattern": "\\."
+        },
+        "lets_encrypt": {
+            "type": "boolean",
+            "title": "Let's Encrypt certificate",
+            "description": "Request a valid Let's Encrypt certificate."
+        },
+        "http2https": {
+            "type": "boolean",
+            "title": "HTTP to HTTPS redirection",
+            "description": "Redirect all the HTTP requests to HTTPS"
+        },
+        "admin_enabled": {
+            "type": "boolean",
+            "description": "Enable the /admin management interface"
+        },
+        "admin_password": {
+            "description": "Admin panel password or Argon2 PHC token (min 8 characters if set)",
+            "anyOf": [
+                {
+                    "type": "string",
+                    "maxLength": 0
+                },
+                {
+                    "type": "string",
+                    "minLength": 8
+                }
+            ]
+        },
+        "signups_allowed": {
+            "type": "boolean",
+            "description": "Allow new users to register without an invitation"
+        },
+        "signups_verify": {
+            "type": "boolean",
+            "description": "Require email verification on signups"
+        },
+        "signups_domains_whitelist": {
+            "type": "string",
+            "description": "Comma-separated list of email domains allowed to register"
+        },
+        "invitations_allowed": {
+            "type": "boolean",
+            "description": "Allow organization admins to invite users"
+        },
+        "show_password_hint": {
+            "type": "boolean",
+            "description": "Show password hints directly on the web page"
+        },
+        "sends_allowed": {
+            "type": "boolean",
+            "description": "Allow users to create Bitwarden Sends"
+        },
+        "emergency_access_allowed": {
+            "type": "boolean",
+            "description": "Allow users to configure emergency access"
+        },
+        "org_events_enabled": {
+            "type": "boolean",
+            "description": "Enable event auditing for organizations"
+        },
+        "smtp_from": {
+            "type": "string",
+            "description": "Optional custom sender email address for SMTP notifications"
+        },
+        "ldap_domain": {
+            "type": "string",
+            "description": "NS8 LDAP / Active Directory domain for user invitation sync"
+        },
+        "ldap_sync_interval": {
+            "type": "integer",
+            "minimum": 60,
+            "description": "LDAP synchronization interval in seconds"
+        },
+        "ldap_search_filter": {
+            "type": "string",
+            "description": "Optional custom LDAP search filter for users"
+        },
+        "push_enabled": {
+            "type": "boolean",
+            "description": "Enable mobile push notifications via Bitwarden push relay"
+        },
+        "push_installation_id": {
+            "type": "string",
+            "description": "Bitwarden Push Installation ID"
+        },
+        "push_installation_key": {
+            "type": "string",
+            "description": "Bitwarden Push Installation Key"
+        },
+        "push_relay_uri": {
+            "type": "string",
+            "description": "Bitwarden Push Relay URI"
+        }
+    }
+}

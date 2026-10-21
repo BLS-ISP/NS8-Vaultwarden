@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import os
+import sys
+import json
+import secrets
+import agent
+
+data = json.load(sys.stdin)
+
+tcp_ports = [p.strip() for p in os.environ.get("TCP_PORTS", "").split(",") if p.strip()]
+tcp_port = os.environ.get("TCP_PORT") or (tcp_ports[0] if tcp_ports else "20000")
+
+agent.set_env("TCP_PORT", tcp_port)
+agent.set_env("HTTP2HTTPS", "True")
+agent.set_env("LETS_ENCRYPT", "False")
+agent.set_env("ADMIN_ENABLED", "True")
+agent.set_env("ADMIN_PASSWORD", secrets.token_urlsafe(16))
+agent.set_env("SIGNUPS_ALLOWED", "False")
+agent.set_env("SIGNUPS_VERIFY", "False")
+agent.set_env("SIGNUPS_DOMAINS_WHITELIST", "")
+agent.set_env("INVITATIONS_ALLOWED", "True")
+agent.set_env("SHOW_PASSWORD_HINT", "False")
+agent.set_env("SENDS_ALLOWED", "True")
+agent.set_env("EMERGENCY_ACCESS_ALLOWED", "True")
+agent.set_env("ORG_EVENTS_ENABLED", "False")
+agent.set_env("LDAP_SYNC_INTERVAL", "3600")
+agent.set_env("PUSH_ENABLED", "False")
+agent.set_env("PUSH_RELAY_URI", "https://push.bitwarden.com")
+agent.dump_env()

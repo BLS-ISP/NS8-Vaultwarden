@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import os
+import secrets
+import sys
+import agent
+
+data = json.load(sys.stdin)
+
+host = (data.get("host") or "").strip()
+http2https = bool(data.get("http2https", True))
+lets_encrypt = bool(data.get("lets_encrypt", False))
+
+admin_enabled = bool(data.get("admin_enabled", True))
+new_admin_password = (data.get("admin_password") or "").strip()
+
+signups_allowed = bool(data.get("signups_allowed", False))
+signups_verify = bool(data.get("signups_verify", False))
+signups_domains_whitelist = (data.get("signups_domains_whitelist") or "").strip()
+invitations_allowed = bool(data.get("invitations_allowed", True))
+show_password_hint = bool(data.get("show_password_hint", False))
+sends_allowed = bool(data.get("sends_allowed", True))
+emergency_access_allowed = bool(data.get("emergency_access_allowed", True))
+org_events_enabled = bool(data.get("org_events_enabled", False))
+smtp_from = (data.get("smtp_from") or "").strip()
+
+ldap_domain = (data.get("ldap_domain") or "").strip()
+try:
+    ldap_sync_interval = max(60, int(data.get("ldap_sync_interval") or 3600))
+except (ValueError, TypeError):
+    ldap_sync_interval = 3600
+ldap_search_filter = (data.get("ldap_search_filter") or "").strip()
+
+push_enabled = bool(data.get("push_enabled", False))
+push_installation_id = (data.get("push_installation_id") or "").strip()
+push_installation_key = (data.get("push_installation_key") or "").strip()
+push_relay_uri = (data.get("push_relay_uri") or "https://push.bitwarden.com").strip() or "https://push.bitwarden.com"
+
+tcp_ports = [p.strip() for p in os.environ.get("TCP_PORTS", "").split(",") if p.strip()]
+tcp_port = os.environ.get("TCP_PORT") or (tcp_ports[0] if tcp_ports else "20000")
+
+validation_errors = []
+
+if (not os.environ.get("HOST") or host != os.environ.get("HOST")) and agent.http_route_in_use(domain=host):
+    validation_errors.append({
+        "field": "host",
+        "parameter": "host",
+        "value": host,
+        "error": "domain_already_used_in_traefik",
+    })
+
+if smtp_from and ("@" not in smtp_from or "." not in smtp_from.split("@")[-1]):
+    validation_errors.append({
+        "field": "smtp_from",
+        "parameter": "smtp_from",
+        "value": smtp_from,
+        "error": "invalid_email",
+    })
+
+if push_enabled:
+    if not push_installation_id:
+        validation_errors.append({
+            "field": "push_installation_id",
+            "parameter": "push_installation_id",
+            "value": "",
+            "error": "push_credentials_required",
+        })
+    if not push_installation_key:
+        validation_errors.append({
+            "field": "push_installation_key",
+            "parameter": "push_installation_key",
+            "value": "",
+            "error": "push_credentials_required",
+        })
+    if not push_relay_uri.startswith("https://"):
+        validation_errors.append({
+            "field": "push_relay_uri",
+            "parameter": "push_relay_uri",
+            "value": push_relay_uri,
+            "error": "invalid_https_url",
+        })
+
+if validation_errors:
+    agent.set_status("validation-failed")
+    json.dump(validation_errors, fp=sys.stdout)
+    sys.exit(2)
+
+whitelist_items = [d.strip().lower() for d in signups_domains_whitelist.split(",") if d.strip()]
+clean_whitelist = ",".join(whitelist_items)
+
+existing_password = os.environ.get("ADMIN_PASSWORD", "")
+if new_admin_password:
+    admin_password = new_admin_password
+    agent.set_env("ADMIN_TOKEN_HASH", "")
+elif existing_password:
+    admin_password = existing_password
+else:
+    admin_password = secrets.token_urlsafe(16)
+    agent.set_env("ADMIN_TOKEN_HASH", "")
+
+agent.set_env("TCP_PORT", tcp_port)
+agent.set_env("HOST", host)
+agent.set_env("HTTP2HTTPS", str(http2https))
+agent.set_env("LETS_ENCRYPT", str(lets_encrypt))
+agent.set_env("ADMIN_ENABLED", str(admin_enabled))
+agent.set_env("ADMIN_PASSWORD", admin_password)
+agent.set_env("SIGNUPS_ALLOWED", str(signups_allowed))
+agent.set_env("SIGNUPS_VERIFY", str(signups_verify))
+agent.set_env("SIGNUPS_DOMAINS_WHITELIST", clean_whitelist)
+agent.set_env("INVITATIONS_ALLOWED", str(invitations_allowed))
+agent.set_env("SHOW_PASSWORD_HINT", str(show_password_hint))
+agent.set_env("SENDS_ALLOWED", str(sends_allowed))
+agent.set_env("EMERGENCY_ACCESS_ALLOWED", str(emergency_access_allowed))
+agent.set_env("ORG_EVENTS_ENABLED", str(org_events_enabled))
+agent.set_env("SMTP_FROM", smtp_from)
+agent.set_env("LDAP_DOMAIN", ldap_domain)
+agent.set_env("LDAP_SYNC_INTERVAL", str(ldap_sync_interval))
+agent.set_env("LDAP_SEARCH_FILTER", ldap_search_filter)
+agent.set_env("PUSH_ENABLED", str(push_enabled))
+agent.set_env("PUSH_INSTALLATION_ID", push_installation_id)
+agent.set_env("PUSH_INSTALLATION_KEY", push_installation_key)
+agent.set_env("PUSH_RELAY_URI", push_relay_uri)
+agent.dump_env()

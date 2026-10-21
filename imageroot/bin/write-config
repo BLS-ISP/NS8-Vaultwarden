@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import os
+import re
+import select
+import subprocess
+import sys
+import agent
+from agent.ldapproxy import Ldapproxy
+
+
+def toml_str(value: str) -> str:
+    """Return a safely escaped TOML basic string literal."""
+    return json.dumps(str(value))
+
+
+def generate_argon2_hash(password: str, server_image: str) -> str:
+    """Generate an Argon2id PHC string using the Vaultwarden binary if available."""
+    if not password:
+        return ""
+    if password.startswith("$argon2"):
+        return password
+    if not server_image:
+        return password
+
+    try:
+        import pty
+        master_fd, slave_fd = pty.openpty()
+        proc = subprocess.Popen(
+            ["podman", "run", "--rm", "-i", "--entrypoint", "/vaultwarden", server_image, "hash", "--preset", "owasp"],
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            close_fds=True,
+        )
+        os.close(slave_fd)
+
+        output = b""
+        prompts_sent = 0
+        while True:
+            rlist, _, _ = select.select([master_fd], [], [], 10.0)
+            if not rlist:
+                break
+            try:
+                chunk = os.read(master_fd, 1024)
+            except OSError:
+                break
+            if not chunk:
+                break
+            output += chunk
+            if prompts_sent == 0 and b"Password:" in output:
+                os.write(master_fd, (password + "\n").encode("utf-8"))
+                prompts_sent = 1
+            elif prompts_sent == 1 and b"Confirm Password:" in output:
+                os.write(master_fd, (password + "\n").encode("utf-8"))
+                prompts_sent = 2
+
+        os.close(master_fd)
+        proc.wait(timeout=10)
+
+        text = output.decode("utf-8", errors="ignore")
+        match = re.search(r"ADMIN_TOKEN='(\$argon2[^']+)'", text)
+        if match:
+            return match.group(1)
+    except Exception as ex:
+        print(f"Info: falling back to direct ADMIN_TOKEN ({ex})", file=sys.stderr)
+
+    return password
+
+
+env = dict(os.environ)
+if os.path.exists("environment"):
+    try:
+        env.update(agent.read_envfile("environment"))
+    except Exception:
+        pass
+
+host = (env.get("HOST") or "vaultwarden.local").strip()
+admin_enabled = env.get("ADMIN_ENABLED", "True") == "True"
+admin_password = env.get("ADMIN_PASSWORD", "")
+admin_token_hash = env.get("ADMIN_TOKEN_HASH", "")
+server_image = env.get("SERVER_IMAGE", "")
+
+signups_allowed = env.get("SIGNUPS_ALLOWED", "False") == "True"
+signups_verify = env.get("SIGNUPS_VERIFY", "False") == "True"
+signups_domains_whitelist = env.get("SIGNUPS_DOMAINS_WHITELIST", "")
+invitations_allowed = env.get("INVITATIONS_ALLOWED", "True") == "True"
+show_password_hint = env.get("SHOW_PASSWORD_HINT", "False") == "True"
+sends_allowed = env.get("SENDS_ALLOWED", "True") == "True"
+emergency_access_allowed = env.get("EMERGENCY_ACCESS_ALLOWED", "True") == "True"
+org_events_enabled = env.get("ORG_EVENTS_ENABLED", "False") == "True"
+smtp_from_custom = env.get("SMTP_FROM", "").strip()
+
+ldap_domain = env.get("LDAP_DOMAIN", "").strip()
+try:
+    ldap_sync_interval = max(60, int(env.get("LDAP_SYNC_INTERVAL") or 3600))
+except ValueError:
+    ldap_sync_interval = 3600
+ldap_search_filter = env.get("LDAP_SEARCH_FILTER", "").strip()
+
+push_enabled = env.get("PUSH_ENABLED", "False") == "True"
+push_installation_id = env.get("PUSH_INSTALLATION_ID", "").strip()
+push_installation_key = env.get("PUSH_INSTALLATION_KEY", "").strip()
+push_relay_uri = (env.get("PUSH_RELAY_URI") or "https://push.bitwarden.com").strip()
+if not push_relay_uri.startswith("https://"):
+    push_relay_uri = "https://push.bitwarden.com"
+
+# Sanitize domain whitelist so Vaultwarden never fails on empty comma tokens
+whitelist_items = [d.strip().lower() for d in signups_domains_whitelist.split(",") if d.strip()]
+clean_whitelist = ",".join(whitelist_items)
+
+# If LDAP user invitation sync is enabled, the /admin endpoint must be active
+effective_admin_enabled = admin_enabled or bool(ldap_domain)
+
+effective_admin_token = ""
+if effective_admin_enabled and admin_password:
+    if admin_token_hash:
+        effective_admin_token = admin_token_hash
+    else:
+        effective_admin_token = generate_argon2_hash(admin_password, server_image)
+        if effective_admin_token.startswith("$argon2"):
+            try:
+                agent.set_env("ADMIN_TOKEN_HASH", effective_admin_token)
+                agent.dump_env()
+            except Exception:
+                pass
+
+smtp_settings = {}
+try:
+    rdb = agent.redis_connect(use_replica=True)
+    smtp_settings = agent.get_smarthost_settings(rdb) or {}
+except Exception as ex:
+    print(f"Warning: could not read smarthost settings from Redis: {ex}", file=sys.stderr)
+
+env_lines = [
+    "# Generated automatically by NethServer 8 Vaultwarden module",
+    f"DOMAIN=https://{host}",
+    "ROCKET_ADDRESS=0.0.0.0",
+    "ROCKET_PORT=80",
+    "WEBSOCKET_ENABLED=true",
+    "WEB_VAULT_ENABLED=true",
+    "IP_HEADER=X-Forwarded-For",
+    "USE_SENDMAIL=false",
+    f"SIGNUPS_ALLOWED={'true' if signups_allowed else 'false'}",
+    f"SIGNUPS_VERIFY={'true' if signups_verify else 'false'}",
+    f"INVITATIONS_ALLOWED={'true' if invitations_allowed else 'false'}",
+    f"SHOW_PASSWORD_HINT={'true' if show_password_hint else 'false'}",
+    f"SENDS_ALLOWED={'true' if sends_allowed else 'false'}",
+    f"EMERGENCY_ACCESS_ALLOWED={'true' if emergency_access_allowed else 'false'}",
+    f"ORG_EVENTS_ENABLED={'true' if org_events_enabled else 'false'}",
+]
+
+if clean_whitelist:
+    env_lines.append(f"SIGNUPS_DOMAINS_WHITELIST={clean_whitelist}")
+
+if effective_admin_enabled and effective_admin_token:
+    env_lines.append(f"ADMIN_TOKEN={effective_admin_token}")
+    env_lines.append("DISABLE_ADMIN_TOKEN=false")
+
+if push_enabled and push_installation_id and push_installation_key:
+    env_lines.extend([
+        "PUSH_ENABLED=true",
+        f"PUSH_INSTALLATION_ID={push_installation_id}",
+        f"PUSH_INSTALLATION_KEY={push_installation_key}",
+        f"PUSH_RELAY_URI={push_relay_uri}",
+    ])
+else:
+    env_lines.append("PUSH_ENABLED=false")
+
+if smtp_settings.get("enabled") and smtp_settings.get("host"):
+    smtp_host = str(smtp_settings.get("host", "")).strip()
+    if smtp_host in ("127.0.0.1", "localhost"):
+        smtp_host = "10.0.2.2"
+    smtp_port = int(smtp_settings.get("port") or 25)
+    smtp_user = str(smtp_settings.get("username") or "").strip()
+    smtp_pass = str(smtp_settings.get("password") or "")
+    encrypt_smtp = str(smtp_settings.get("encrypt_smtp", "none")).lower()
+    tls_verify = bool(smtp_settings.get("tls_verify", False))
+
+    if encrypt_smtp in ("tls", "ssl") or smtp_port == 465:
+        smtp_security = "force_tls"
+    elif encrypt_smtp == "starttls":
+        smtp_security = "starttls"
+    else:
+        smtp_security = "off"
+
+    smtp_from = smtp_from_custom if ("@" in smtp_from_custom and "." in smtp_from_custom.split("@")[-1]) else f"vaultwarden@{host}"
+    if "." not in smtp_from.split("@")[-1]:
+        smtp_from = "vaultwarden@localhost.localdomain"
+
+    env_lines.extend([
+        f"SMTP_HOST={smtp_host}",
+        f"SMTP_PORT={smtp_port}",
+        f"SMTP_SECURITY={smtp_security}",
+        f"SMTP_FROM={smtp_from}",
+        "SMTP_FROM_NAME=Vaultwarden",
+        f"SMTP_ACCEPT_INVALID_CERTS={'false' if tls_verify else 'true'}",
+        f"SMTP_ACCEPT_INVALID_HOSTNAMES={'false' if tls_verify else 'true'}",
+    ])
+    if smtp_user:
+        env_lines.extend([
+            f"SMTP_USERNAME={smtp_user}",
+            f"SMTP_PASSWORD={smtp_pass}",
+        ])
+
+vw_env_path = "vaultwarden.env"
+vw_env_tmp = f".vaultwarden.env-{os.getpid()}.tmp"
+with open(vw_env_tmp, "w", encoding="utf-8", newline="\n") as ofile:
+    for line in env_lines:
+        ofile.write(f"{line}\n")
+os.chmod(vw_env_tmp, 0o600)
+os.replace(vw_env_tmp, vw_env_path)
+
+# If /data/config.json exists from a manual save in /admin, remove keys managed by NS8
+# so that vaultwarden.env always remains authoritative for NS8 UI settings.
+vol_cfg_path = os.path.expanduser("~/.local/share/containers/storage/volumes/vaultwarden-data/_data/config.json")
+if os.path.isfile(vol_cfg_path):
+    try:
+        with open(vol_cfg_path, "r", encoding="utf-8") as cf:
+            cfg_data = json.load(cf)
+        if isinstance(cfg_data, dict):
+            managed_keys = [
+                "domain",
+                "admin_token",
+                "disable_admin_token",
+                "signups_allowed",
+                "signups_verify",
+                "signups_domains_whitelist",
+                "invitations_allowed",
+                "show_password_hint",
+                "sends_allowed",
+                "emergency_access_allowed",
+                "org_events_enabled",
+                "push_enabled",
+                "push_installation_id",
+                "push_installation_key",
+                "push_relay_uri",
+                "smtp_host",
+                "smtp_port",
+                "smtp_security",
+                "smtp_from",
+                "smtp_from_name",
+                "smtp_username",
+                "smtp_password",
+                "smtp_accept_invalid_certs",
+                "smtp_accept_invalid_hostnames",
+                "_enable_smtp",
+            ]
+            changed = False
+            for k in managed_keys:
+                if k in cfg_data:
+                    del cfg_data[k]
+                    changed = True
+            if changed:
+                cfg_tmp = f"{vol_cfg_path}.tmp"
+                with open(cfg_tmp, "w", encoding="utf-8") as cf:
+                    json.dump(cfg_data, cf, indent=2)
+                os.replace(cfg_tmp, vol_cfg_path)
+    except Exception as ex:
+        print(f"Warning: could not synchronize config.json: {ex}", file=sys.stderr)
+
+# Render LDAP invitation sync configuration (state/ldap_config.toml)
+odom = None
+if ldap_domain:
+    try:
+        odom = Ldapproxy().get_domain(ldap_domain)
+    except Exception as ex:
+        print(f"Warning: failed to load LDAP domain '{ldap_domain}': {ex}", file=sys.stderr)
+
+if not odom or "port" not in odom:
+    odom = {
+        "host": "10.0.2.2",
+        "port": 20000,
+        "schema": "rfc2307",
+        "base_dn": "dc=vaultwarden,dc=invalid",
+        "bind_dn": "",
+        "bind_password": "",
+    }
+
+is_ad = odom.get("schema") == "ad"
+default_filter = (
+    "(&(objectClass=user)(!(objectClass=computer))(mail=*))"
+    if is_ad
+    else "(&(objectClass=inetOrgPerson)(mail=*))"
+)
+effective_filter = ldap_search_filter or default_filter
+
+toml_lines = [
+    "# Generated automatically by NethServer 8 Vaultwarden module",
+    'vaultwarden_url = "http://127.0.0.1:80"',
+    f"vaultwarden_admin_token = {toml_str(admin_password)}",
+    'ldap_host = "10.0.2.2"',
+    f"ldap_port = {int(odom.get('port') or 389)}",
+    "ldap_ssl = false",
+    "ldap_starttls = false",
+    "ldap_no_tls_verify = true",
+    f"ldap_bind_dn = {toml_str(odom.get('bind_dn') or '')}",
+    f"ldap_bind_password = {toml_str(odom.get('bind_password') or '')}",
+    f"ldap_search_base_dn = {toml_str(odom.get('base_dn') or '')}",
+    f"ldap_search_filter = {toml_str(effective_filter)}",
+    'ldap_mail_field = "mail"',
+    f"ldap_sync_interval_seconds = {ldap_sync_interval}",
+    "ldap_sync_loop = true",
+]
+
+ldap_cfg_path = "ldap_config.toml"
+ldap_cfg_tmp = f".ldap_config.toml-{os.getpid()}.tmp"
+with open(ldap_cfg_tmp, "w", encoding="utf-8", newline="\n") as lfile:
+    for line in toml_lines:
+        lfile.write(f"{line}\n")
+os.chmod(ldap_cfg_tmp, 0o600)
+os.replace(ldap_cfg_tmp, ldap_cfg_path)

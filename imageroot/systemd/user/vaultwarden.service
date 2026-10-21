@@ -1,0 +1,26 @@
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Vaultwarden Pod
+Requires=vaultwarden-app.service
+Before=vaultwarden-app.service vaultwarden-ldap.service
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=-%S/state/environment
+WorkingDirectory=%S/state
+Restart=always
+TimeoutStopSec=70
+ExecStartPre=/bin/rm -f %t/vaultwarden.pid %t/vaultwarden.pod-id
+ExecStartPre=/usr/bin/podman pod create --infra-conmon-pidfile %t/vaultwarden.pid --pod-id-file %t/vaultwarden.pod-id --name vaultwarden -p 127.0.0.1:${TCP_PORT}:80 --replace --network=slirp4netns:allow_host_loopback=true
+ExecStart=/usr/bin/podman pod start --pod-id-file %t/vaultwarden.pod-id
+ExecStop=/usr/bin/podman pod stop --ignore --pod-id-file %t/vaultwarden.pod-id -t 10
+ExecStopPost=/usr/bin/podman pod rm --ignore -f --pod-id-file %t/vaultwarden.pod-id
+PIDFile=%t/vaultwarden.pid
+Type=forking
+
+[Install]
+WantedBy=default.target

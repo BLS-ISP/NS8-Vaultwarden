@@ -1,0 +1,37 @@
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Vaultwarden Server
+BindsTo=vaultwarden.service
+After=vaultwarden.service
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=-%S/state/environment
+WorkingDirectory=%S/state
+Restart=always
+TimeoutStopSec=70
+ExecStartPre=/bin/rm -f %t/vaultwarden-app.pid %t/vaultwarden-app.ctr-id
+ExecStartPre=/usr/local/bin/runagent ../bin/write-config
+ExecStart=/usr/bin/podman run \
+    --detach \
+    --name vaultwarden-app \
+    --conmon-pidfile=%t/vaultwarden-app.pid \
+    --cidfile=%t/vaultwarden-app.ctr-id \
+    --cgroups=no-conmon \
+    --pod-id-file %t/vaultwarden.pod-id \
+    --replace \
+    --env-file=%S/state/vaultwarden.env \
+    --volume vaultwarden-data:/data:Z \
+    ${SERVER_IMAGE}
+ExecReload=/usr/bin/podman kill -s HUP vaultwarden-app
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/vaultwarden-app.ctr-id -t 20
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/vaultwarden-app.ctr-id
+PIDFile=%t/vaultwarden-app.pid
+Type=forking
+
+[Install]
+WantedBy=default.target

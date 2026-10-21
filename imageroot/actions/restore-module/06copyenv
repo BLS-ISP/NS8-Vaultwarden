@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import sys
+import json
+import agent
+
+request = json.load(sys.stdin)
+original_environment = request.get("environment", {})
+
+for evar in [
+    "HOST",
+    "HTTP2HTTPS",
+    "LETS_ENCRYPT",
+    "ADMIN_ENABLED",
+    "ADMIN_PASSWORD",
+    "ADMIN_TOKEN_HASH",
+    "SIGNUPS_ALLOWED",
+    "SIGNUPS_VERIFY",
+    "SIGNUPS_DOMAINS_WHITELIST",
+    "INVITATIONS_ALLOWED",
+    "SHOW_PASSWORD_HINT",
+    "SENDS_ALLOWED",
+    "EMERGENCY_ACCESS_ALLOWED",
+    "ORG_EVENTS_ENABLED",
+    "SMTP_FROM",
+    "LDAP_DOMAIN",
+    "LDAP_SYNC_INTERVAL",
+    "LDAP_SEARCH_FILTER",
+    "PUSH_ENABLED",
+    "PUSH_INSTALLATION_ID",
+    "PUSH_INSTALLATION_KEY",
+    "PUSH_RELAY_URI",
+]:
+    if evar in original_environment:
+        agent.set_env(evar, original_environment[evar])
+
+agent.dump_env()

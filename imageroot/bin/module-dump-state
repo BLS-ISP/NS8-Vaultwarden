@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+if systemctl --user -q is-active vaultwarden-app.service; then
+    podman exec vaultwarden-app /vaultwarden backup >/dev/null 2>&1 || true
+fi

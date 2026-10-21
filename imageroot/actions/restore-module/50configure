@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import glob
+import json
+import os
+import shutil
+import sys
+import agent
+import agent.tasks
+
+request = json.load(sys.stdin)
+renv = request.get("environment", {})
+
+# If an online VACUUM INTO SQLite snapshot (db_YYYYMMDD_HHMMSS.sqlite3) exists in the restored volume,
+# promote the latest snapshot to db.sqlite3 and clean up any stale WAL/SHM files.
+vol_data_dir = os.path.expanduser("~/.local/share/containers/storage/volumes/vaultwarden-data/_data")
+if os.path.isdir(vol_data_dir):
+    snapshots = sorted(glob.glob(os.path.join(vol_data_dir, "db_*.sqlite3")))
+    if snapshots:
+        latest_snap = snapshots[-1]
+        target_db = os.path.join(vol_data_dir, "db.sqlite3")
+        try:
+            shutil.copy2(latest_snap, target_db)
+            for wal_ext in ("-wal", "-shm"):
+                wal_path = target_db + wal_ext
+                if os.path.exists(wal_path):
+                    os.remove(wal_path)
+            for snap in snapshots:
+                os.remove(snap)
+        except Exception as ex:
+            print(f"Warning: could not promote SQLite snapshot {latest_snap}: {ex}", file=sys.stderr)
+
+host = renv.get("HOST") or os.environ.get("HOST", "")
+if host:
+    try:
+        ldap_sync_interval = int(renv.get("LDAP_SYNC_INTERVAL") or os.environ.get("LDAP_SYNC_INTERVAL") or 3600)
+    except ValueError:
+        ldap_sync_interval = 3600
+
+    configure_retval = agent.tasks.run(
+        agent_id=os.environ["AGENT_ID"],
+        action="configure-module",
+        data={
+            "host": host,
+            "http2https": renv.get("HTTP2HTTPS", "True") == "True",
+            "lets_encrypt": renv.get("LETS_ENCRYPT", "False") == "True",
+            "admin_enabled": renv.get("ADMIN_ENABLED", "True") == "True",
+            "admin_password": "",
+            "signups_allowed": renv.get("SIGNUPS_ALLOWED", "False") == "True",
+            "signups_verify": renv.get("SIGNUPS_VERIFY", "False") == "True",
+            "signups_domains_whitelist": renv.get("SIGNUPS_DOMAINS_WHITELIST", ""),
+            "invitations_allowed": renv.get("INVITATIONS_ALLOWED", "True") == "True",
+            "show_password_hint": renv.get("SHOW_PASSWORD_HINT", "False") == "True",
+            "sends_allowed": renv.get("SENDS_ALLOWED", "True") == "True",
+            "emergency_access_allowed": renv.get("EMERGENCY_ACCESS_ALLOWED", "True") == "True",
+            "org_events_enabled": renv.get("ORG_EVENTS_ENABLED", "False") == "True",
+            "smtp_from": renv.get("SMTP_FROM", ""),
+            "ldap_domain": renv.get("LDAP_DOMAIN", ""),
+            "ldap_sync_interval": ldap_sync_interval,
+            "ldap_search_filter": renv.get("LDAP_SEARCH_FILTER", ""),
+            "push_enabled": renv.get("PUSH_ENABLED", "False") == "True",
+            "push_installation_id": renv.get("PUSH_INSTALLATION_ID", ""),
+            "push_installation_key": renv.get("PUSH_INSTALLATION_KEY", ""),
+            "push_relay_uri": renv.get("PUSH_RELAY_URI", "https://push.bitwarden.com"),
+        },
+    )
+    agent.assert_exp(configure_retval["exit_code"] == 0, "The configure-module subtask failed!")

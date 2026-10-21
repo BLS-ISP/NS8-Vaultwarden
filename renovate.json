@@ -1,0 +1,20 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["local>NethServer/.github:ns8-automerge"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/build-images.sh/"],
+      "matchStrings": ["docker\\.io/vaultwarden/server:(?<currentValue>[-0-9\\.a-z]+)"],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "vaultwarden/server"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/build-images.sh/"],
+      "matchStrings": ["docker\\.io/vividboarder/vaultwarden_ldap:(?<currentValue>[-0-9\\.a-z]+)"],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "vividboarder/vaultwarden_ldap"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+set -e
+
+exec 1>&2
+
+systemctl --user daemon-reload
+systemctl --user try-restart vaultwarden.service
+
+if [[ -n "${LDAP_DOMAIN}" ]] && systemctl --user is-active --quiet vaultwarden.service; then
+    systemctl --user enable vaultwarden-ldap.service
+    systemctl --user try-restart vaultwarden-ldap.service
+fi

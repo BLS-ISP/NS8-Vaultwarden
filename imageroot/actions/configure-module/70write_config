@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import os
+import subprocess
+import sys
+
+bin_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "bin"))
+subprocess.run([sys.executable, os.path.join(bin_dir, "write-config")], check=True)

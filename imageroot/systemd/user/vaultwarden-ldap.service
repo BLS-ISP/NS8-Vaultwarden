@@ -1,0 +1,38 @@
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Vaultwarden LDAP User Invitation Sync
+BindsTo=vaultwarden.service
+After=vaultwarden.service vaultwarden-app.service
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=-%S/state/environment
+WorkingDirectory=%S/state
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+ExecStartPre=/bin/rm -f %t/vaultwarden-ldap.pid %t/vaultwarden-ldap.ctr-id
+ExecStartPre=/usr/local/bin/runagent ../bin/write-config
+ExecStartPre=/usr/bin/bash -c "for i in {1..30}; do (echo > /dev/tcp/127.0.0.1/${TCP_PORT}) >/dev/null 2>&1 && break; sleep 1; done"
+ExecStart=/usr/bin/podman run \
+    --detach \
+    --name vaultwarden-ldap \
+    --conmon-pidfile=%t/vaultwarden-ldap.pid \
+    --cidfile=%t/vaultwarden-ldap.ctr-id \
+    --cgroups=no-conmon \
+    --pod-id-file %t/vaultwarden.pod-id \
+    --replace \
+    --env CONFIG_PATH=/config.toml \
+    --volume %S/state/ldap_config.toml:/config.toml:ro,Z \
+    ${VAULTWARDEN_LDAP_IMAGE}
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/vaultwarden-ldap.ctr-id -t 10
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/vaultwarden-ldap.ctr-id
+PIDFile=%t/vaultwarden-ldap.pid
+Type=forking
+
+[Install]
+WantedBy=default.target

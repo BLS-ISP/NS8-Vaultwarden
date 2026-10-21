@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import os
+import agent
+import agent.tasks
+
+host = os.environ.get("HOST", "")
+if host:
+    try:
+        ldap_sync_interval = int(os.environ.get("LDAP_SYNC_INTERVAL") or 3600)
+    except ValueError:
+        ldap_sync_interval = 3600
+
+    configure_retval = agent.tasks.run(
+        agent_id=os.environ["AGENT_ID"],
+        action="configure-module",
+        data={
+            "host": host,
+            "http2https": os.environ.get("HTTP2HTTPS", "True") == "True",
+            "lets_encrypt": os.environ.get("LETS_ENCRYPT", "False") == "True",
+            "admin_enabled": os.environ.get("ADMIN_ENABLED", "True") == "True",
+            "admin_password": "",
+            "signups_allowed": os.environ.get("SIGNUPS_ALLOWED", "False") == "True",
+            "signups_verify": os.environ.get("SIGNUPS_VERIFY", "False") == "True",
+            "signups_domains_whitelist": os.environ.get("SIGNUPS_DOMAINS_WHITELIST", ""),
+            "invitations_allowed": os.environ.get("INVITATIONS_ALLOWED", "True") == "True",
+            "show_password_hint": os.environ.get("SHOW_PASSWORD_HINT", "False") == "True",
+            "sends_allowed": os.environ.get("SENDS_ALLOWED", "True") == "True",
+            "emergency_access_allowed": os.environ.get("EMERGENCY_ACCESS_ALLOWED", "True") == "True",
+            "org_events_enabled": os.environ.get("ORG_EVENTS_ENABLED", "False") == "True",
+            "smtp_from": os.environ.get("SMTP_FROM", ""),
+            "ldap_domain": os.environ.get("LDAP_DOMAIN", ""),
+            "ldap_sync_interval": ldap_sync_interval,
+            "ldap_search_filter": os.environ.get("LDAP_SEARCH_FILTER", ""),
+            "push_enabled": os.environ.get("PUSH_ENABLED", "False") == "True",
+            "push_installation_id": os.environ.get("PUSH_INSTALLATION_ID", ""),
+            "push_installation_key": os.environ.get("PUSH_INSTALLATION_KEY", ""),
+            "push_relay_uri": os.environ.get("PUSH_RELAY_URI", "https://push.bitwarden.com"),
+        },
+    )
+    agent.assert_exp(configure_retval["exit_code"] == 0, "The configure-module subtask failed!")
