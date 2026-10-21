@@ -13,9 +13,11 @@
     }
   ],
   "docs": {
+    "terms_url": "https://github.com/BLS-ISP/NS8-Vaultwarden#data-privacy--terms",
     "documentation_url": "https://github.com/BLS-ISP/NS8-Vaultwarden",
     "bug_url": "https://github.com/BLS-ISP/NS8-Vaultwarden/issues",
-    "code_url": "https://github.com/BLS-ISP/NS8-Vaultwarden"
+    "code_url": "https://github.com/BLS-ISP/NS8-Vaultwarden",
+    "relnotes_url": "https://github.com/BLS-ISP/NS8-Vaultwarden/releases"
   },
   "source": "ghcr.io/bls-isp/vaultwarden"
 }

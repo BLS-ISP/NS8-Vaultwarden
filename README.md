@@ -5,6 +5,7 @@
 - **GitHub Repository:** [`https://github.com/BLS-ISP/NS8-Vaultwarden`](https://github.com/BLS-ISP/NS8-Vaultwarden)
 - **Container Image:** `ghcr.io/bls-isp/vaultwarden`
 - **NS8 Software Center Repository URL:** `https://raw.githubusercontent.com/BLS-ISP/NS8-Vaultwarden/repomd/`
+- **License:** GPL-3.0-or-later
 
 ---
 
@@ -44,13 +45,13 @@
 Instantiate the module using a **Semantic Version tag** (do not use `:latest` in production, as NS8 skips UI updates for `:latest` development instances):
 
 ```bash
-add-module ghcr.io/bls-isp/vaultwarden:1.0.0 1
+add-module ghcr.io/bls-isp/vaultwarden:1.0.1 1
 ```
 
 The output of the command will return the instance name:
 
 ```json
-{"module_id": "vaultwarden1", "image_name": "vaultwarden", "image_url": "ghcr.io/bls-isp/vaultwarden:1.0.0"}
+{"module_id": "vaultwarden1", "image_name": "vaultwarden", "image_url": "ghcr.io/bls-isp/vaultwarden:1.0.1"}
 ```
 
 ---
@@ -116,16 +117,71 @@ api-cli run module/vaultwarden1/configure-module --data '{
 ### Systemd User Units (`imageroot/systemd/user/`)
 
 - `vaultwarden.service`: Manages the rootless Podman pod (`vaultwarden`) with port mapping `127.0.0.1:${TCP_PORT}:80` and `--network=slirp4netns:allow_host_loopback=true`.
-- `vaultwarden-app.service`: Runs the `docker.io/vaultwarden/server:1.37.4` container inside the pod. Executes `../bin/write-config` prior to startup to render `state/vaultwarden.env` (and synchronize `/data/config.json` if present).
-- `vaultwarden-ldap.service`: Optional container (`docker.io/vividboarder/vaultwarden_ldap:2.2.1`) inside the pod that queries the bound NS8 `Ldapproxy` domain and automatically sends Vaultwarden invitations to discovered LDAP/AD users.
+- `vaultwarden-app.service`: Runs the `docker.io/vaultwarden/server:1.37.4` (`${SERVER_IMAGE}`) container inside the pod. Executes `../bin/write-config` prior to startup to render `state/vaultwarden.env` from the module environment and Redis smarthost settings.
+- `vaultwarden-ldap.service`: Optional container (`docker.io/vividboarder/vaultwarden_ldap:2.2.1`, `${VAULTWARDEN_LDAP_IMAGE}`) inside the pod that queries the bound NS8 `Ldapproxy` domain (`10.0.2.2:<port>`) using `state/ldap_config.toml` and automatically sends Vaultwarden invitations to discovered LDAP/AD users via `http://127.0.0.1:80/admin/invite`.
 
-### Persistent Volumes (`imageroot/etc/state-include.conf`)
+### Persistent Volumes (`imageroot/etc/state-include.conf` & `org.nethserver.volumes`)
 
 | Volume / Path | Container Mountpoint | Description | Included in Backup |
 |---|---|---|---|
-| `vaultwarden-data` | `/data` | SQLite database (`db.sqlite3`), RSA keys, attachments, sends, icon cache | Yes |
-| `state/vaultwarden.env` | — | Generated Vaultwarden runtime environment file | Yes |
-| `state/environment` | — | Module instance environment variables | Yes |
+| `vaultwarden-data` | `/data` | SQLite database (`db.sqlite3`), RSA keypair, file attachments, Bitwarden Sends, icon cache | Yes (`volumes/vaultwarden-data`) |
+| `state/vaultwarden.env` | — | Generated Vaultwarden runtime environment file (rendered by `write-config`) | Regenerated on restore/clone |
+| `state/ldap_config.toml` | `/config.toml` (`ro`) | Generated `vaultwarden_ldap` configuration file (rendered by `write-config`) | Regenerated on restore/clone |
+| `state/environment` | — | Module instance environment variables | Backed up via NS8 agent metadata |
+
+### Environment Variables (`state/environment`)
+
+| Variable | Description |
+|---|---|
+| `TCP_PORT` | Allocated local TCP port for Vaultwarden HTTP behind Traefik |
+| `HOST` | Configured FQDN for the Vaultwarden web vault |
+| `HTTP2HTTPS` | Whether Traefik redirects HTTP to HTTPS (`True` / `False`) |
+| `LETS_ENCRYPT` | Whether Traefik requests a Let's Encrypt certificate (`True` / `False`) |
+| `ADMIN_ENABLED` | Enables or disables the `/admin` portal (`True` / `False`) |
+| `ADMIN_PASSWORD` | Configured admin secret (used to generate `ADMIN_TOKEN_HASH` and authenticate `vaultwarden_ldap`) |
+| `ADMIN_TOKEN_HASH` | Cached Argon2id PHC string passed as `ADMIN_TOKEN` to Vaultwarden |
+| `SIGNUPS_ALLOWED` | Allows open self-registration (`True` / `False`) |
+| `SIGNUPS_VERIFY` | Requires email verification on signup (`True` / `False`) |
+| `SIGNUPS_DOMAINS_WHITELIST` | Comma-separated list of email domains allowed to self-register |
+| `INVITATIONS_ALLOWED` | Allows organization admins to invite users (`True` / `False`) |
+| `SHOW_PASSWORD_HINT` | Displays password hints on the web page (`True` / `False`) |
+| `SENDS_ALLOWED` | Enables Bitwarden Send (`True` / `False`) |
+| `EMERGENCY_ACCESS_ALLOWED` | Enables Emergency Access (`True` / `False`) |
+| `ORG_EVENTS_ENABLED` | Enables organization audit event logging (`True` / `False`) |
+| `SMTP_FROM` | Optional custom SMTP sender email address |
+| `LDAP_DOMAIN` | Optional NethServer 8 user domain name bound via `Ldapproxy` |
+| `LDAP_SYNC_INTERVAL` | Interval in seconds between `vaultwarden_ldap` sync cycles |
+| `LDAP_SEARCH_FILTER` | Optional custom LDAP user search filter |
+| `PUSH_ENABLED` | Enables mobile push notifications via Bitwarden Push Relay (`True` / `False`) |
+| `PUSH_INSTALLATION_ID` | Bitwarden Push Installation ID |
+| `PUSH_INSTALLATION_KEY` | Bitwarden Push Installation Key |
+| `PUSH_RELAY_URI` | Bitwarden Push Relay URI (defaults to `https://push.bitwarden.com`) |
+
+### Maintenance, Backup/Restore & Customization Procedures
+
+- **Online SQLite Backup (`imageroot/bin/module-dump-state`):** Before Restic snapshots `volumes/vaultwarden-data`, `module-dump-state` executes `podman exec vaultwarden-app /vaultwarden backup`, which creates an atomic `VACUUM INTO` snapshot (`/data/db_YYYYMMDD_HHMMSS.sqlite3`). After the backup finishes, `module-cleanup-state` removes the temporary snapshot files. Upon `restore-module`, `50configure` automatically promotes the newest `db_*.sqlite3` snapshot to `/data/db.sqlite3` and removes stale `-wal`/`-shm` files.
+- **Interaction with `/data/config.json`:** If an administrator saves settings inside Vaultwarden's internal `/admin` portal, Vaultwarden writes `/data/config.json`. During `write-config`, keys managed by the NS8 UI are automatically stripped from `/data/config.json` so that NS8 UI settings in `state/vaultwarden.env` always remain authoritative, while preserving any other custom settings set in `/admin`.
+
+---
+
+## Data Privacy & Terms
+
+- **Local Encrypted Storage:** All vault items, passwords, attachments, and Bitwarden Sends are encrypted client-side before transmission and stored locally on the NethServer 8 node inside the `vaultwarden-data` volume.
+- **Optional Third-Party Connections:**
+  - **Let's Encrypt:** When `lets_encrypt` is enabled, Traefik contacts Let's Encrypt ACME servers to issue and renew TLS certificates for the configured `host`.
+  - **Bitwarden Push Relay (Optional, disabled by default):** When `push_enabled` is explicitly activated with an Installation ID and Key from `bitwarden.com/host`, Vaultwarden sends push notification wake-up signals (containing no vault data) to `https://push.bitwarden.com` so mobile apps sync immediately.
+  - **Website Icons:** By default, Vaultwarden fetches website favicons directly for vault entries unless disabled via `/admin`.
+- **Licensing:** This module and Vaultwarden are distributed under the **GNU General Public License v3.0 or later (GPL-3.0-or-later)**.
+
+---
+
+## Limitations, Roadmap & Contact
+
+- **LDAP Integration Behavior:** Because Bitwarden/Vaultwarden uses zero-knowledge client-side encryption derived from each user's master password, LDAP cannot authenticate master passwords directly. Instead, `vaultwarden_ldap` queries the selected NethServer 8 LDAP/AD user domain and automatically sends email invitations to domain users so they can initialize their encrypted vault.
+- **Support & Contact:**
+  - **Issue Tracker:** [`https://github.com/BLS-ISP/NS8-Vaultwarden/issues`](https://github.com/BLS-ISP/NS8-Vaultwarden/issues)
+  - **Maintainer:** BLS-ISP (`info@bls-isp.de`)
+  - **NethServer Community Forum:** [`https://community.nethserver.org/`](https://community.nethserver.org/)
 
 ---
 
@@ -144,11 +200,11 @@ api-cli run update-module --data '{"module_url":"ghcr.io/bls-isp/vaultwarden:1.0
 In accordance with NethServer 8 standards, releases must use pure **Semantic Versioning (`X.Y.Z`) without a `v` prefix** (e.g. `1.0.0`, `1.0.1`, or `1.0.2-testing.1` for pre-releases):
 
 ```bash
-git tag -a 1.0.0 -m "Release 1.0.0"
+git tag -a 1.0.1 -m "Release 1.0.1"
 git push origin main --tags
 ```
 
-The GitHub Actions workflow (`.github/workflows/publish-images.yml`) automatically builds and publishes `ghcr.io/bls-isp/vaultwarden:1.0.0` and updates `repodata.json` on the `repomd` branch.
+The GitHub Actions workflow (`.github/workflows/publish-images.yml`) automatically builds and publishes `ghcr.io/bls-isp/vaultwarden:1.0.1` and updates `repodata.json` on the `repomd` branch.
 
 ---
 
@@ -167,5 +223,5 @@ remove-module --no-preserve vaultwarden1
 Test the module using the `test-module.sh` script:
 
 ```bash
-./test-module.sh <NODE_ADDR> ghcr.io/bls-isp/vaultwarden:1.0.0
+./test-module.sh <NODE_ADDR> ghcr.io/bls-isp/vaultwarden:1.0.1
 ```

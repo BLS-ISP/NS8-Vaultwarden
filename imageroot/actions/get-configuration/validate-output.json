@@ -1,8 +1,167 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "get-configuration output",
-    "$id": "http://schema.nethserver.org/kickstart/get-configuration-output.json",
-    "description": "Get vaultwarden configuration",
-    "examples": [],
-    "type": "object"
+    "$id": "http://nethserver.org/json-schema/task/output/vaultwarden/get-configuration",
+    "description": "Get Vaultwarden module configuration",
+    "examples": [
+        {
+            "host": "vault.nethserver.org",
+            "http2https": true,
+            "lets_encrypt": true,
+            "admin_enabled": true,
+            "has_admin_password": true,
+            "signups_allowed": false,
+            "signups_verify": false,
+            "signups_domains_whitelist": "nethserver.org",
+            "invitations_allowed": true,
+            "show_password_hint": false,
+            "sends_allowed": true,
+            "emergency_access_allowed": true,
+            "org_events_enabled": false,
+            "smtp_from": "vaultwarden@nethserver.org",
+            "smarthost_enabled": true,
+            "smarthost_host": "mail.nethserver.org",
+            "ldap_domain": "nethserver.org",
+            "ldap_domain_list": [
+                {
+                    "name": "nethserver.org",
+                    "label": "nethserver.org",
+                    "value": "nethserver.org"
+                }
+            ],
+            "ldap_sync_interval": 3600,
+            "ldap_search_filter": "",
+            "push_enabled": false,
+            "push_installation_id": "",
+            "push_installation_key": "",
+            "push_relay_uri": "https://push.bitwarden.com",
+            "configured": true
+        }
+    ],
+    "type": "object",
+    "required": [
+        "host",
+        "http2https",
+        "lets_encrypt",
+        "admin_enabled",
+        "signups_allowed",
+        "invitations_allowed",
+        "configured"
+    ],
+    "properties": {
+        "host": {
+            "type": "string",
+            "description": "Configured FQDN for the Vaultwarden web vault"
+        },
+        "http2https": {
+            "type": "boolean",
+            "description": "Whether HTTP requests are redirected to HTTPS"
+        },
+        "lets_encrypt": {
+            "type": "boolean",
+            "description": "Whether a Let's Encrypt certificate is requested"
+        },
+        "admin_enabled": {
+            "type": "boolean",
+            "description": "Whether the /admin management interface is enabled"
+        },
+        "has_admin_password": {
+            "type": "boolean",
+            "description": "Whether an admin password/token is currently configured"
+        },
+        "signups_allowed": {
+            "type": "boolean",
+            "description": "Whether open user registration is allowed"
+        },
+        "signups_verify": {
+            "type": "boolean",
+            "description": "Whether email verification is required on signup"
+        },
+        "signups_domains_whitelist": {
+            "type": "string",
+            "description": "Comma-separated list of email domains allowed to register"
+        },
+        "invitations_allowed": {
+            "type": "boolean",
+            "description": "Whether organization admins can invite users"
+        },
+        "show_password_hint": {
+            "type": "boolean",
+            "description": "Whether password hints are displayed directly on the web page"
+        },
+        "sends_allowed": {
+            "type": "boolean",
+            "description": "Whether Bitwarden Send is enabled"
+        },
+        "emergency_access_allowed": {
+            "type": "boolean",
+            "description": "Whether Emergency Access is enabled"
+        },
+        "org_events_enabled": {
+            "type": "boolean",
+            "description": "Whether organization audit event logging is enabled"
+        },
+        "smtp_from": {
+            "type": "string",
+            "description": "Custom sender email address for SMTP notifications"
+        },
+        "smarthost_enabled": {
+            "type": "boolean",
+            "description": "Whether the NethServer 8 cluster Smarthost is enabled"
+        },
+        "smarthost_host": {
+            "type": "string",
+            "description": "Hostname of the active NethServer 8 Smarthost"
+        },
+        "ldap_domain": {
+            "type": "string",
+            "description": "Bound NS8 LDAP / Active Directory user domain"
+        },
+        "ldap_domain_list": {
+            "type": "array",
+            "description": "Available NS8 user domains from Ldapproxy",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "value": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "ldap_sync_interval": {
+            "type": "integer",
+            "description": "LDAP user invitation sync interval in seconds"
+        },
+        "ldap_search_filter": {
+            "type": "string",
+            "description": "Custom LDAP search filter for user discovery"
+        },
+        "push_enabled": {
+            "type": "boolean",
+            "description": "Whether mobile push notifications are enabled"
+        },
+        "push_installation_id": {
+            "type": "string",
+            "description": "Bitwarden Push Installation ID"
+        },
+        "push_installation_key": {
+            "type": "string",
+            "description": "Bitwarden Push Installation Key"
+        },
+        "push_relay_uri": {
+            "type": "string",
+            "description": "Bitwarden Push Relay URI"
+        },
+        "configured": {
+            "type": "boolean",
+            "description": "True if the module has been configured at least once"
+        }
+    }
 }
