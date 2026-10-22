@@ -73,6 +73,10 @@
             "type": "boolean",
             "description": "Show password hints directly on the web page"
         },
+        "web_vault_enabled": {
+            "type": "boolean",
+            "description": "Enable the built-in Vaultwarden web vault interface"
+        },
         "sends_allowed": {
             "type": "boolean",
             "description": "Allow users to create Bitwarden Sends"
@@ -117,6 +121,10 @@
         "push_relay_uri": {
             "type": "string",
             "description": "Bitwarden Push Relay URI"
+        },
+        "push_identity_uri": {
+            "type": "string",
+            "description": "Bitwarden Push Identity URI"
         }
     }
 }

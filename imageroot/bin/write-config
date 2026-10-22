@@ -92,6 +92,7 @@ signups_verify = env.get("SIGNUPS_VERIFY", "False") == "True"
 signups_domains_whitelist = env.get("SIGNUPS_DOMAINS_WHITELIST", "")
 invitations_allowed = env.get("INVITATIONS_ALLOWED", "True") == "True"
 show_password_hint = env.get("SHOW_PASSWORD_HINT", "False") == "True"
+web_vault_enabled = env.get("WEB_VAULT_ENABLED", "True") == "True"
 sends_allowed = env.get("SENDS_ALLOWED", "True") == "True"
 emergency_access_allowed = env.get("EMERGENCY_ACCESS_ALLOWED", "True") == "True"
 org_events_enabled = env.get("ORG_EVENTS_ENABLED", "False") == "True"
@@ -110,6 +111,17 @@ push_installation_key = env.get("PUSH_INSTALLATION_KEY", "").strip()
 push_relay_uri = (env.get("PUSH_RELAY_URI") or "https://push.bitwarden.com").strip()
 if not push_relay_uri.startswith("https://"):
     push_relay_uri = "https://push.bitwarden.com"
+
+default_identity_uri = (
+    "https://identity.bitwarden.eu"
+    if push_relay_uri.rstrip("/").endswith(".eu")
+    else "https://identity.bitwarden.com"
+)
+push_identity_uri = (env.get("PUSH_IDENTITY_URI") or default_identity_uri).strip()
+if not push_identity_uri.startswith("https://"):
+    push_identity_uri = default_identity_uri
+if push_relay_uri.rstrip("/").endswith(".eu") and push_identity_uri == "https://identity.bitwarden.com":
+    push_identity_uri = "https://identity.bitwarden.eu"
 
 # Sanitize domain whitelist so Vaultwarden never fails on empty comma tokens
 whitelist_items = [d.strip().lower() for d in signups_domains_whitelist.split(",") if d.strip()]
@@ -144,7 +156,7 @@ env_lines = [
     "ROCKET_ADDRESS=0.0.0.0",
     "ROCKET_PORT=80",
     "WEBSOCKET_ENABLED=true",
-    "WEB_VAULT_ENABLED=true",
+    f"WEB_VAULT_ENABLED={'true' if web_vault_enabled else 'false'}",
     "IP_HEADER=X-Forwarded-For",
     "USE_SENDMAIL=false",
     f"SIGNUPS_ALLOWED={'true' if signups_allowed else 'false'}",
@@ -169,6 +181,7 @@ if push_enabled and push_installation_id and push_installation_key:
         f"PUSH_INSTALLATION_ID={push_installation_id}",
         f"PUSH_INSTALLATION_KEY={push_installation_key}",
         f"PUSH_RELAY_URI={push_relay_uri}",
+        f"PUSH_IDENTITY_URI={push_identity_uri}",
     ])
 else:
     env_lines.append("PUSH_ENABLED=false")
@@ -234,6 +247,7 @@ if os.path.isfile(vol_cfg_path):
                 "signups_domains_whitelist",
                 "invitations_allowed",
                 "show_password_hint",
+                "web_vault_enabled",
                 "sends_allowed",
                 "emergency_access_allowed",
                 "org_events_enabled",
@@ -241,6 +255,7 @@ if os.path.isfile(vol_cfg_path):
                 "push_installation_id",
                 "push_installation_key",
                 "push_relay_uri",
+                "push_identity_uri",
                 "smtp_host",
                 "smtp_port",
                 "smtp_security",

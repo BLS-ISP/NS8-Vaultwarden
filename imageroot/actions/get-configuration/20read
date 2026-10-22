@@ -35,6 +35,7 @@ config["signups_verify"] = env.get("SIGNUPS_VERIFY", "False") == "True"
 config["signups_domains_whitelist"] = env.get("SIGNUPS_DOMAINS_WHITELIST", "")
 config["invitations_allowed"] = env.get("INVITATIONS_ALLOWED", "True") == "True"
 config["show_password_hint"] = env.get("SHOW_PASSWORD_HINT", "False") == "True"
+config["web_vault_enabled"] = env.get("WEB_VAULT_ENABLED", "True") == "True"
 config["sends_allowed"] = env.get("SENDS_ALLOWED", "True") == "True"
 config["emergency_access_allowed"] = env.get("EMERGENCY_ACCESS_ALLOWED", "True") == "True"
 config["org_events_enabled"] = env.get("ORG_EVENTS_ENABLED", "False") == "True"
@@ -46,6 +47,12 @@ config["push_enabled"] = env.get("PUSH_ENABLED", "False") == "True"
 config["push_installation_id"] = env.get("PUSH_INSTALLATION_ID", "")
 config["push_installation_key"] = env.get("PUSH_INSTALLATION_KEY", "")
 config["push_relay_uri"] = env.get("PUSH_RELAY_URI", "https://push.bitwarden.com")
+default_identity_uri = (
+    "https://identity.bitwarden.eu"
+    if config["push_relay_uri"].rstrip("/").endswith(".eu")
+    else "https://identity.bitwarden.com"
+)
+config["push_identity_uri"] = env.get("PUSH_IDENTITY_URI", default_identity_uri)
 config["configured"] = bool(config["host"])
 
 smarthost_enabled = False

@@ -25,6 +25,7 @@ signups_verify = bool(data.get("signups_verify", False))
 signups_domains_whitelist = (data.get("signups_domains_whitelist") or "").strip()
 invitations_allowed = bool(data.get("invitations_allowed", True))
 show_password_hint = bool(data.get("show_password_hint", False))
+web_vault_enabled = bool(data.get("web_vault_enabled", True))
 sends_allowed = bool(data.get("sends_allowed", True))
 emergency_access_allowed = bool(data.get("emergency_access_allowed", True))
 org_events_enabled = bool(data.get("org_events_enabled", False))
@@ -41,6 +42,10 @@ push_enabled = bool(data.get("push_enabled", False))
 push_installation_id = (data.get("push_installation_id") or "").strip()
 push_installation_key = (data.get("push_installation_key") or "").strip()
 push_relay_uri = (data.get("push_relay_uri") or "https://push.bitwarden.com").strip() or "https://push.bitwarden.com"
+default_identity_uri = "https://identity.bitwarden.eu" if push_relay_uri.rstrip("/").endswith(".eu") else "https://identity.bitwarden.com"
+push_identity_uri = (data.get("push_identity_uri") or "").strip() or default_identity_uri
+if push_relay_uri.rstrip("/").endswith(".eu") and push_identity_uri == "https://identity.bitwarden.com":
+    push_identity_uri = "https://identity.bitwarden.eu"
 
 tcp_ports = [p.strip() for p in os.environ.get("TCP_PORTS", "").split(",") if p.strip()]
 tcp_port = os.environ.get("TCP_PORT") or (tcp_ports[0] if tcp_ports else "20000")
@@ -85,6 +90,13 @@ if push_enabled:
             "value": push_relay_uri,
             "error": "invalid_https_url",
         })
+    if not push_identity_uri.startswith("https://"):
+        validation_errors.append({
+            "field": "push_identity_uri",
+            "parameter": "push_identity_uri",
+            "value": push_identity_uri,
+            "error": "invalid_https_url",
+        })
 
 if validation_errors:
     agent.set_status("validation-failed")
@@ -115,6 +127,7 @@ agent.set_env("SIGNUPS_VERIFY", str(signups_verify))
 agent.set_env("SIGNUPS_DOMAINS_WHITELIST", clean_whitelist)
 agent.set_env("INVITATIONS_ALLOWED", str(invitations_allowed))
 agent.set_env("SHOW_PASSWORD_HINT", str(show_password_hint))
+agent.set_env("WEB_VAULT_ENABLED", str(web_vault_enabled))
 agent.set_env("SENDS_ALLOWED", str(sends_allowed))
 agent.set_env("EMERGENCY_ACCESS_ALLOWED", str(emergency_access_allowed))
 agent.set_env("ORG_EVENTS_ENABLED", str(org_events_enabled))
@@ -126,4 +139,5 @@ agent.set_env("PUSH_ENABLED", str(push_enabled))
 agent.set_env("PUSH_INSTALLATION_ID", push_installation_id)
 agent.set_env("PUSH_INSTALLATION_KEY", push_installation_key)
 agent.set_env("PUSH_RELAY_URI", push_relay_uri)
+agent.set_env("PUSH_IDENTITY_URI", push_identity_uri)
 agent.dump_env()

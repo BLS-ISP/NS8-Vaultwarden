@@ -224,6 +224,23 @@
                 }}</template>
                 <template slot="content">
                   <NsToggle
+                    :label="$t('settings.web_vault_enabled')"
+                    value="web_vault_enabled"
+                    :form-item="true"
+                    v-model="web_vault_enabled"
+                    :disabled="
+                      loading.getConfiguration || loading.configureModule
+                    "
+                    ref="web_vault_enabled"
+                  >
+                    <template slot="text-left">{{
+                      $t("settings.disabled")
+                    }}</template>
+                    <template slot="text-right">{{
+                      $t("settings.enabled")
+                    }}</template>
+                  </NsToggle>
+                  <NsToggle
                     :label="$t('settings.sends_allowed')"
                     value="sends_allowed"
                     :form-item="true"
@@ -346,11 +363,24 @@
                     :label="$t('settings.push_relay_uri')"
                     v-model.trim="push_relay_uri"
                     placeholder="https://push.bitwarden.com"
+                    :helper-text="$t('settings.push_relay_uri_helper')"
                     :disabled="
                       loading.getConfiguration || loading.configureModule
                     "
                     :invalid-message="error.push_relay_uri"
                     ref="push_relay_uri"
+                  ></cv-text-input>
+                  <cv-text-input
+                    v-if="push_enabled"
+                    :label="$t('settings.push_identity_uri')"
+                    v-model.trim="push_identity_uri"
+                    placeholder="https://identity.bitwarden.com"
+                    :helper-text="$t('settings.push_identity_uri_helper')"
+                    :disabled="
+                      loading.getConfiguration || loading.configureModule
+                    "
+                    :invalid-message="error.push_identity_uri"
+                    ref="push_identity_uri"
                   ></cv-text-input>
                 </template>
               </cv-accordion-item>
@@ -421,6 +451,7 @@ export default {
       signups_domains_whitelist: "",
       invitations_allowed: true,
       show_password_hint: false,
+      web_vault_enabled: true,
       sends_allowed: true,
       emergency_access_allowed: true,
       org_events_enabled: false,
@@ -435,6 +466,7 @@ export default {
       push_installation_id: "",
       push_installation_key: "",
       push_relay_uri: "https://push.bitwarden.com",
+      push_identity_uri: "https://identity.bitwarden.com",
       loading: {
         getConfiguration: false,
         configureModule: false,
@@ -452,6 +484,7 @@ export default {
         signups_domains_whitelist: "",
         invitations_allowed: "",
         show_password_hint: "",
+        web_vault_enabled: "",
         sends_allowed: "",
         emergency_access_allowed: "",
         org_events_enabled: "",
@@ -463,6 +496,7 @@ export default {
         push_installation_id: "",
         push_installation_key: "",
         push_relay_uri: "",
+        push_identity_uri: "",
       },
     };
   },
@@ -545,6 +579,10 @@ export default {
           ? Boolean(config.invitations_allowed)
           : true;
       this.show_password_hint = Boolean(config.show_password_hint);
+      this.web_vault_enabled =
+        config.web_vault_enabled !== undefined
+          ? Boolean(config.web_vault_enabled)
+          : true;
       this.sends_allowed =
         config.sends_allowed !== undefined
           ? Boolean(config.sends_allowed)
@@ -576,6 +614,8 @@ export default {
       this.push_installation_key = config.push_installation_key || "";
       this.push_relay_uri =
         config.push_relay_uri || "https://push.bitwarden.com";
+      this.push_identity_uri =
+        config.push_identity_uri || "https://identity.bitwarden.com";
 
       this.focusElement("host");
     },
@@ -658,6 +698,17 @@ export default {
             isValidationOk = false;
           }
         }
+        if (
+          this.push_identity_uri &&
+          !this.push_identity_uri.startsWith("https://")
+        ) {
+          this.error.push_identity_uri = this.$t("settings.invalid_https_url");
+          this.toggleAccordion = [true];
+          if (isValidationOk) {
+            this.focusElement("push_identity_uri");
+            isValidationOk = false;
+          }
+        }
       }
 
       return isValidationOk;
@@ -711,6 +762,7 @@ export default {
             signups_domains_whitelist: this.signups_domains_whitelist || "",
             invitations_allowed: this.invitations_allowed,
             show_password_hint: this.show_password_hint,
+            web_vault_enabled: this.web_vault_enabled,
             sends_allowed: this.sends_allowed,
             emergency_access_allowed: this.emergency_access_allowed,
             org_events_enabled: this.org_events_enabled,
@@ -723,6 +775,8 @@ export default {
             push_installation_key: this.push_installation_key || "",
             push_relay_uri:
               this.push_relay_uri || "https://push.bitwarden.com",
+            push_identity_uri:
+              this.push_identity_uri || "https://identity.bitwarden.com",
           },
           extra: {
             title: this.$t("settings.configure_instance", {

@@ -15,6 +15,7 @@
             "signups_domains_whitelist": "nethserver.org",
             "invitations_allowed": true,
             "show_password_hint": false,
+            "web_vault_enabled": true,
             "sends_allowed": true,
             "emergency_access_allowed": true,
             "org_events_enabled": false,
@@ -35,6 +36,7 @@
             "push_installation_id": "",
             "push_installation_key": "",
             "push_relay_uri": "https://push.bitwarden.com",
+            "push_identity_uri": "https://identity.bitwarden.com",
             "configured": true
         }
     ],
@@ -88,6 +90,10 @@
         "show_password_hint": {
             "type": "boolean",
             "description": "Whether password hints are displayed directly on the web page"
+        },
+        "web_vault_enabled": {
+            "type": "boolean",
+            "description": "Whether the built-in Vaultwarden web vault interface is enabled"
         },
         "sends_allowed": {
             "type": "boolean",
@@ -158,6 +164,10 @@
         "push_relay_uri": {
             "type": "string",
             "description": "Bitwarden Push Relay URI"
+        },
+        "push_identity_uri": {
+            "type": "string",
+            "description": "Bitwarden Push Identity URI"
         },
         "configured": {
             "type": "boolean",
