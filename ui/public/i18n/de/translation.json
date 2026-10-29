@@ -55,6 +55,7 @@
         "push_installation_id": "Bitwarden Push Installation ID",
         "push_installation_helper": "Kostenlos abrufbar unter https://bitwarden.com/host",
         "push_installation_key": "Bitwarden Push Installation Key",
+        "push_installation_key_helper": "Leer lassen, um den bestehenden Push Installation Key beizubehalten.",
         "push_relay_uri": "Bitwarden Push Relay URI",
         "push_relay_uri_helper": "https://push.bitwarden.com (US/Global) oder https://push.bitwarden.eu (EU).",
         "push_identity_uri": "Bitwarden Push Identity URI",

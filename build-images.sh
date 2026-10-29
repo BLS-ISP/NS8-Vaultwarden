@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (C) 2023 Nethesis S.r.l.
+# Copyright (C) 2026 BLS-ISP
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
@@ -21,7 +21,7 @@ container=$(buildah from scratch)
 # Reuse existing nodebuilder-vaultwarden container, to speed up builds
 if ! buildah containers --format "{{.ContainerName}}" | grep -q nodebuilder-vaultwarden; then
     echo "Pulling NodeJS runtime..."
-    buildah from --name nodebuilder-vaultwarden -v "${PWD}:/usr/src:Z" docker.io/library/node:lts
+    buildah from --name nodebuilder-vaultwarden -v "${PWD}:/usr/src:Z" docker.io/library/node:22.23.4
 fi
 
 echo "Build static UI files with node..."
@@ -36,7 +36,7 @@ buildah add "${container}" imageroot /imageroot
 buildah add "${container}" ui/dist /ui
 # Setup the entrypoint, ask to reserve one TCP port with the label and set a rootless container
 buildah config --entrypoint=/ \
-    --label="org.nethserver.authorizations=traefik@any:routeadm cluster:accountconsumer" \
+    --label="org.nethserver.authorizations=traefik@node:routeadm cluster:accountconsumer" \
     --label="org.nethserver.tcp-ports-demand=1" \
     --label="org.nethserver.rootfull=0" \
     --label="org.nethserver.min-core=3.0.0" \

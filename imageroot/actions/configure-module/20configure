@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #
-# Copyright (C) 2024 Nethesis S.r.l.
+# Copyright (C) 2026 BLS-ISP
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
@@ -40,25 +40,35 @@ ldap_search_filter = (data.get("ldap_search_filter") or "").strip()
 
 push_enabled = bool(data.get("push_enabled", False))
 push_installation_id = (data.get("push_installation_id") or "").strip()
-push_installation_key = (data.get("push_installation_key") or "").strip()
+new_push_key = (data.get("push_installation_key") or "").strip()
 push_relay_uri = (data.get("push_relay_uri") or "https://push.bitwarden.com").strip() or "https://push.bitwarden.com"
-default_identity_uri = "https://identity.bitwarden.eu" if push_relay_uri.rstrip("/").endswith(".eu") else "https://identity.bitwarden.com"
+default_identity_uri = (
+    "https://identity.bitwarden.eu"
+    if push_relay_uri.rstrip("/").endswith(".eu")
+    else "https://identity.bitwarden.com"
+)
 push_identity_uri = (data.get("push_identity_uri") or "").strip() or default_identity_uri
 if push_relay_uri.rstrip("/").endswith(".eu") and push_identity_uri == "https://identity.bitwarden.com":
     push_identity_uri = "https://identity.bitwarden.eu"
+
+secrets_path = "secrets.env"
+stored_secrets = {}
+if os.path.exists(secrets_path):
+    try:
+        stored_secrets = agent.read_envfile(secrets_path)
+    except Exception as ex:
+        print(agent.SD_WARNING + f"Failed to read {secrets_path}: {ex}", file=sys.stderr)
+
+existing_password = stored_secrets.get("ADMIN_PASSWORD") or os.environ.get("ADMIN_PASSWORD", "")
+existing_token_hash = stored_secrets.get("ADMIN_TOKEN_HASH") or os.environ.get("ADMIN_TOKEN_HASH", "")
+existing_push_key = stored_secrets.get("PUSH_INSTALLATION_KEY") or os.environ.get("PUSH_INSTALLATION_KEY", "")
+
+push_installation_key = new_push_key if new_push_key else existing_push_key
 
 tcp_ports = [p.strip() for p in os.environ.get("TCP_PORTS", "").split(",") if p.strip()]
 tcp_port = os.environ.get("TCP_PORT") or (tcp_ports[0] if tcp_ports else "20000")
 
 validation_errors = []
-
-if (not os.environ.get("HOST") or host != os.environ.get("HOST")) and agent.http_route_in_use(domain=host):
-    validation_errors.append({
-        "field": "host",
-        "parameter": "host",
-        "value": host,
-        "error": "domain_already_used_in_traefik",
-    })
 
 if smtp_from and ("@" not in smtp_from or "." not in smtp_from.split("@")[-1]):
     validation_errors.append({
@@ -106,22 +116,36 @@ if validation_errors:
 whitelist_items = [d.strip().lower() for d in signups_domains_whitelist.split(",") if d.strip()]
 clean_whitelist = ",".join(whitelist_items)
 
-existing_password = os.environ.get("ADMIN_PASSWORD", "")
 if new_admin_password:
     admin_password = new_admin_password
-    agent.set_env("ADMIN_TOKEN_HASH", "")
+    admin_token_hash = ""
 elif existing_password:
     admin_password = existing_password
+    admin_token_hash = existing_token_hash
 else:
     admin_password = secrets.token_urlsafe(16)
-    agent.set_env("ADMIN_TOKEN_HASH", "")
+    admin_token_hash = ""
+
+agent.write_envfile(
+    secrets_path,
+    {
+        "ADMIN_PASSWORD": admin_password,
+        "ADMIN_TOKEN_HASH": admin_token_hash,
+        "PUSH_INSTALLATION_KEY": push_installation_key,
+    },
+)
+os.chmod(secrets_path, 0o600)
+
+# Ensure legacy secret keys are removed from environment/Redis if upgrading from an older release
+for legacy_secret in ("ADMIN_PASSWORD", "ADMIN_TOKEN_HASH", "PUSH_INSTALLATION_KEY"):
+    if legacy_secret in os.environ:
+        agent.unset_env(legacy_secret)
 
 agent.set_env("TCP_PORT", tcp_port)
 agent.set_env("HOST", host)
 agent.set_env("HTTP2HTTPS", str(http2https))
 agent.set_env("LETS_ENCRYPT", str(lets_encrypt))
 agent.set_env("ADMIN_ENABLED", str(admin_enabled))
-agent.set_env("ADMIN_PASSWORD", admin_password)
 agent.set_env("SIGNUPS_ALLOWED", str(signups_allowed))
 agent.set_env("SIGNUPS_VERIFY", str(signups_verify))
 agent.set_env("SIGNUPS_DOMAINS_WHITELIST", clean_whitelist)
@@ -137,7 +161,6 @@ agent.set_env("LDAP_SYNC_INTERVAL", str(ldap_sync_interval))
 agent.set_env("LDAP_SEARCH_FILTER", ldap_search_filter)
 agent.set_env("PUSH_ENABLED", str(push_enabled))
 agent.set_env("PUSH_INSTALLATION_ID", push_installation_id)
-agent.set_env("PUSH_INSTALLATION_KEY", push_installation_key)
 agent.set_env("PUSH_RELAY_URI", push_relay_uri)
 agent.set_env("PUSH_IDENTITY_URI", push_identity_uri)
 agent.dump_env()

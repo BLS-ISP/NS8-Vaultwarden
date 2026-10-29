@@ -1,5 +1,5 @@
 <!--
-  Copyright (C) 2024 Nethesis S.r.l.
+  Copyright (C) 2026 BLS-ISP
   SPDX-License-Identifier: GPL-3.0-or-later
 -->
 <template>
@@ -25,7 +25,7 @@
           kind="info"
           :title="$t('settings.urls_info_title')"
           :description="
-            admin_enabled
+            admin_enabled || ldap_domain
               ? $t('settings.urls_info_description_with_admin', {
                   host: host,
                 })
@@ -55,14 +55,14 @@
       <cv-column>
         <cv-tile light>
           <cv-form @submit.prevent="configureModule">
-            <cv-text-input
+            <NsTextInput
               :label="$t('settings.host')"
               v-model.trim="host"
               placeholder="vault.example.org"
               :disabled="loading.getConfiguration || loading.configureModule"
               :invalid-message="error.host"
               ref="host"
-            ></cv-text-input>
+            />
             <NsToggle
               :label="$t('settings.lets_encrypt')"
               value="lets_encrypt"
@@ -109,7 +109,7 @@
                 $t("settings.enabled")
               }}</template>
             </NsToggle>
-            <cv-text-input
+            <NsTextInput
               v-if="admin_enabled || ldap_domain"
               :label="$t('settings.admin_password')"
               type="password"
@@ -118,7 +118,7 @@
               :disabled="loading.getConfiguration || loading.configureModule"
               :invalid-message="error.admin_password"
               ref="admin_password"
-            ></cv-text-input>
+            />
 
             <NsToggle
               :label="$t('settings.signups_allowed')"
@@ -150,7 +150,7 @@
                 $t("settings.enabled")
               }}</template>
             </NsToggle>
-            <cv-text-input
+            <NsTextInput
               :label="$t('settings.signups_domains_whitelist')"
               v-model.trim="signups_domains_whitelist"
               placeholder="example.org,company.de"
@@ -158,7 +158,7 @@
               :disabled="loading.getConfiguration || loading.configureModule"
               :invalid-message="error.signups_domains_whitelist"
               ref="signups_domains_whitelist"
-            ></cv-text-input>
+            />
             <NsToggle
               :label="$t('settings.invitations_allowed')"
               value="invitations_allowed"
@@ -195,7 +195,7 @@
                 {{ $t("settings.choose_the_ldap_domain_to_invite_users") }}
               </template>
             </NsComboBox>
-            <cv-text-input
+            <NsTextInput
               v-if="ldap_domain"
               :label="$t('settings.ldap_sync_interval')"
               type="number"
@@ -205,8 +205,8 @@
               :disabled="loading.getConfiguration || loading.configureModule"
               :invalid-message="error.ldap_sync_interval"
               ref="ldap_sync_interval"
-            ></cv-text-input>
-            <cv-text-input
+            />
+            <NsTextInput
               v-if="ldap_domain"
               :label="$t('settings.ldap_search_filter')"
               v-model.trim="ldap_search_filter"
@@ -215,7 +215,7 @@
               :disabled="loading.getConfiguration || loading.configureModule"
               :invalid-message="error.ldap_search_filter"
               ref="ldap_search_filter"
-            ></cv-text-input>
+            />
 
             <cv-accordion ref="accordion" class="mg-bottom-lg">
               <cv-accordion-item :open="toggleAccordion[0]">
@@ -308,7 +308,7 @@
                       $t("settings.enabled")
                     }}</template>
                   </NsToggle>
-                  <cv-text-input
+                  <NsTextInput
                     :label="$t('settings.smtp_from')"
                     v-model.trim="smtp_from"
                     placeholder="vaultwarden@example.org"
@@ -318,7 +318,7 @@
                     "
                     :invalid-message="error.smtp_from"
                     ref="smtp_from"
-                  ></cv-text-input>
+                  />
                   <NsToggle
                     :label="$t('settings.push_enabled')"
                     value="push_enabled"
@@ -336,7 +336,7 @@
                       $t("settings.enabled")
                     }}</template>
                   </NsToggle>
-                  <cv-text-input
+                  <NsTextInput
                     v-if="push_enabled"
                     :label="$t('settings.push_installation_id')"
                     v-model.trim="push_installation_id"
@@ -346,19 +346,24 @@
                     "
                     :invalid-message="error.push_installation_id"
                     ref="push_installation_id"
-                  ></cv-text-input>
-                  <cv-text-input
+                  />
+                  <NsTextInput
                     v-if="push_enabled"
                     :label="$t('settings.push_installation_key')"
                     type="password"
                     v-model.trim="push_installation_key"
+                    :helper-text="
+                      has_push_installation_key
+                        ? $t('settings.push_installation_key_helper')
+                        : ''
+                    "
                     :disabled="
                       loading.getConfiguration || loading.configureModule
                     "
                     :invalid-message="error.push_installation_key"
                     ref="push_installation_key"
-                  ></cv-text-input>
-                  <cv-text-input
+                  />
+                  <NsTextInput
                     v-if="push_enabled"
                     :label="$t('settings.push_relay_uri')"
                     v-model.trim="push_relay_uri"
@@ -369,8 +374,8 @@
                     "
                     :invalid-message="error.push_relay_uri"
                     ref="push_relay_uri"
-                  ></cv-text-input>
-                  <cv-text-input
+                  />
+                  <NsTextInput
                     v-if="push_enabled"
                     :label="$t('settings.push_identity_uri')"
                     v-model.trim="push_identity_uri"
@@ -381,7 +386,7 @@
                     "
                     :invalid-message="error.push_identity_uri"
                     ref="push_identity_uri"
-                  ></cv-text-input>
+                  />
                 </template>
               </cv-accordion-item>
             </cv-accordion>
@@ -464,6 +469,7 @@ export default {
       ldap_search_filter: "",
       push_enabled: false,
       push_installation_id: "",
+      has_push_installation_key: false,
       push_installation_key: "",
       push_relay_uri: "https://push.bitwarden.com",
       push_identity_uri: "https://identity.bitwarden.com",
@@ -611,7 +617,10 @@ export default {
       this.ldap_search_filter = config.ldap_search_filter || "";
       this.push_enabled = Boolean(config.push_enabled);
       this.push_installation_id = config.push_installation_id || "";
-      this.push_installation_key = config.push_installation_key || "";
+      this.has_push_installation_key = Boolean(
+        config.has_push_installation_key
+      );
+      this.push_installation_key = "";
       this.push_relay_uri =
         config.push_relay_uri || "https://push.bitwarden.com";
       this.push_identity_uri =
@@ -679,7 +688,7 @@ export default {
             isValidationOk = false;
           }
         }
-        if (!this.push_installation_key) {
+        if (!this.push_installation_key && !this.has_push_installation_key) {
           this.error.push_installation_key = this.$t("common.required");
           this.toggleAccordion = [true];
           if (isValidationOk) {
@@ -719,6 +728,9 @@ export default {
       for (const validationError of validationErrors) {
         const param = validationError.parameter;
         this.error[param] = this.$t("settings." + validationError.error);
+      }
+      if (validationErrors.length > 0) {
+        this.focusElement(validationErrors[0].parameter);
       }
     },
     async configureModule() {

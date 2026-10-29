@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
 #
-# Copyright (C) 2024 Nethesis S.r.l.
+# Copyright (C) 2026 BLS-ISP
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-import sys
 import json
+import os
+import sys
 import agent
 
 request = json.load(sys.stdin)
@@ -17,13 +18,12 @@ for evar in [
     "HTTP2HTTPS",
     "LETS_ENCRYPT",
     "ADMIN_ENABLED",
-    "ADMIN_PASSWORD",
-    "ADMIN_TOKEN_HASH",
     "SIGNUPS_ALLOWED",
     "SIGNUPS_VERIFY",
     "SIGNUPS_DOMAINS_WHITELIST",
     "INVITATIONS_ALLOWED",
     "SHOW_PASSWORD_HINT",
+    "WEB_VAULT_ENABLED",
     "SENDS_ALLOWED",
     "EMERGENCY_ACCESS_ALLOWED",
     "ORG_EVENTS_ENABLED",
@@ -33,10 +33,22 @@ for evar in [
     "LDAP_SEARCH_FILTER",
     "PUSH_ENABLED",
     "PUSH_INSTALLATION_ID",
-    "PUSH_INSTALLATION_KEY",
     "PUSH_RELAY_URI",
+    "PUSH_IDENTITY_URI",
 ]:
     if evar in original_environment:
         agent.set_env(evar, original_environment[evar])
 
 agent.dump_env()
+
+# Migrate legacy secrets from older backups (<= 1.0.2) into secrets.env if not restored by Restic
+secrets_path = "secrets.env"
+if not os.path.exists(secrets_path):
+    legacy_secrets = {
+        k: original_environment.get(k, "")
+        for k in ("ADMIN_PASSWORD", "ADMIN_TOKEN_HASH", "PUSH_INSTALLATION_KEY")
+        if k in original_environment
+    }
+    if legacy_secrets:
+        agent.write_envfile(secrets_path, legacy_secrets)
+        os.chmod(secrets_path, 0o600)

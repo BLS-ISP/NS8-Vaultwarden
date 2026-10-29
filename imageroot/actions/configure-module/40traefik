@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 #
-# Copyright (C) 2023 Nethesis S.r.l.
+# Copyright (C) 2026 BLS-ISP
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 import json
-import sys
 import os
+import sys
 import agent
 import agent.tasks
 
@@ -18,8 +18,7 @@ lets_encrypt = os.environ.get("LETS_ENCRYPT", "False") == "True"
 http2https = os.environ.get("HTTP2HTTPS", "True") == "True"
 
 default_traefik_id = agent.resolve_agent_id("traefik@node")
-if default_traefik_id is None:
-    sys.exit(2)
+agent.assert_exp(default_traefik_id is not None, "Cannot find Traefik instance on current node")
 
 response = agent.tasks.run(
     agent_id=default_traefik_id,
@@ -32,4 +31,4 @@ response = agent.tasks.run(
         "http2https": http2https,
     },
 )
-agent.assert_exp(response["exit_code"] == 0)
+agent.assert_exp(response["exit_code"] == 0, "Failed to configure Traefik route")

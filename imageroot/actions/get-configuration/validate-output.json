@@ -34,7 +34,7 @@
             "ldap_search_filter": "",
             "push_enabled": false,
             "push_installation_id": "",
-            "push_installation_key": "",
+            "has_push_installation_key": false,
             "push_relay_uri": "https://push.bitwarden.com",
             "push_identity_uri": "https://identity.bitwarden.com",
             "configured": true
@@ -157,9 +157,9 @@
             "type": "string",
             "description": "Bitwarden Push Installation ID"
         },
-        "push_installation_key": {
-            "type": "string",
-            "description": "Bitwarden Push Installation Key"
+        "has_push_installation_key": {
+            "type": "boolean",
+            "description": "Whether a Bitwarden Push Installation Key is currently configured"
         },
         "push_relay_uri": {
             "type": "string",

@@ -1,6 +1,6 @@
 {
   "name": "Vaultwarden",
-  "upstream_name": "Vaultwarden 1.37.4",
+  "upstream_name": "Vaultwarden",
   "description": {
     "en": "Self-hosted Bitwarden-compatible password manager server written in Rust, with Admin Panel, Smarthost, LDAP Sync, and Push Notifications",
     "de": "Selbstgehosteter Bitwarden-kompatibler Passwort-Manager-Server in Rust, inkl. Admin-Panel, Smarthost-, LDAP-Sync- und Push-Integration"

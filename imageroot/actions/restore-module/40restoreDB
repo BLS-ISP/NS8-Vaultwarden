@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 BLS-ISP
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import glob
+import os
+import shutil
+import sys
+import agent
+
+# If an online VACUUM INTO SQLite snapshot (db_YYYYMMDD_HHMMSS.sqlite3) exists in the restored volume,
+# promote the latest snapshot to db.sqlite3 and clean up any stale WAL/SHM files.
+vol_data_dir = os.path.expanduser("~/.local/share/containers/storage/volumes/vaultwarden-data/_data")
+if os.path.isdir(vol_data_dir):
+    snapshots = sorted(glob.glob(os.path.join(vol_data_dir, "db_*.sqlite3")))
+    if snapshots:
+        latest_snap = snapshots[-1]
+        target_db = os.path.join(vol_data_dir, "db.sqlite3")
+        try:
+            shutil.copy2(latest_snap, target_db)
+            for wal_ext in ("-wal", "-shm"):
+                wal_path = target_db + wal_ext
+                if os.path.exists(wal_path):
+                    os.remove(wal_path)
+            for snap in snapshots:
+                os.remove(snap)
+        except Exception as ex:
+            print(agent.SD_ERR + f"Failed to promote SQLite snapshot {latest_snap}: {ex}", file=sys.stderr)
+            sys.exit(1)

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (C) 2023 Nethesis S.r.l.
+# Copyright (C) 2026 BLS-ISP
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
@@ -12,13 +12,13 @@ exec 1>&2
 
 systemctl --user daemon-reload
 
-# Start or restart Vaultwarden Pod and Server
+# Enable and restart pod + child services explicitly in dependency order
 systemctl --user enable vaultwarden.service vaultwarden-app.service
-systemctl --user restart vaultwarden.service
 
 if [[ -n "${LDAP_DOMAIN}" ]]; then
     systemctl --user enable vaultwarden-ldap.service
-    systemctl --user restart vaultwarden-ldap.service
+    systemctl --user restart vaultwarden.service vaultwarden-app.service vaultwarden-ldap.service
 else
     systemctl --user disable --now vaultwarden-ldap.service 2>/dev/null || true
+    systemctl --user restart vaultwarden.service vaultwarden-app.service
 fi

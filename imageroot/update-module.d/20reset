@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (C) 2023 Nethesis S.r.l.
+# Copyright (C) 2026 BLS-ISP
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
@@ -9,10 +9,46 @@ set -e
 
 exec 1>&2
 
-systemctl --user daemon-reload
-systemctl --user try-restart vaultwarden.service
+# Migrate any legacy secrets from environment/Redis to secrets.env (mode 0600)
+python3 - <<'EOF'
+import os
+import sys
+import agent
 
-if [[ -n "${LDAP_DOMAIN}" ]] && systemctl --user is-active --quiet vaultwarden.service; then
-    systemctl --user enable vaultwarden-ldap.service
-    systemctl --user try-restart vaultwarden-ldap.service
+secrets_path = "secrets.env"
+stored = {}
+if os.path.exists(secrets_path):
+    try:
+        stored = agent.read_envfile(secrets_path)
+    except Exception as ex:
+        print(agent.SD_WARNING + f"Failed to read {secrets_path}: {ex}", file=sys.stderr)
+
+changed = False
+unset_any = False
+for key in ("ADMIN_PASSWORD", "ADMIN_TOKEN_HASH", "PUSH_INSTALLATION_KEY"):
+    val = os.environ.get(key, "")
+    if val and not stored.get(key):
+        stored[key] = val
+        changed = True
+    if key in os.environ:
+        agent.unset_env(key)
+        unset_any = True
+
+if changed:
+    agent.write_envfile(secrets_path, stored)
+    os.chmod(secrets_path, 0o600)
+
+if unset_any:
+    agent.dump_env()
+EOF
+
+systemctl --user daemon-reload
+
+if systemctl --user is-enabled --quiet vaultwarden.service; then
+    if [[ -n "${LDAP_DOMAIN}" ]]; then
+        systemctl --user enable vaultwarden-ldap.service
+        systemctl --user restart vaultwarden.service vaultwarden-app.service vaultwarden-ldap.service
+    else
+        systemctl --user restart vaultwarden.service vaultwarden-app.service
+    fi
 fi

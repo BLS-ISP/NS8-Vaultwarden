@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 
 #
-# Copyright (C) 2024 Nethesis S.r.l.
+# Copyright (C) 2026 BLS-ISP
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 import json
-import sys
-import subprocess
 import os
+import subprocess
+import sys
 import agent
 
 event = json.load(sys.stdin)

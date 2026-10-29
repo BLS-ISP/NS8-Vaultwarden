@@ -5,6 +5,13 @@
     {
       "customType": "regex",
       "managerFilePatterns": ["/build-images.sh/"],
+      "matchStrings": ["docker\\.io/library/node:(?<currentValue>[-0-9\\.a-z]+)"],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "library/node"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/build-images.sh/"],
       "matchStrings": ["docker\\.io/vaultwarden/server:(?<currentValue>[-0-9\\.a-z]+)"],
       "datasourceTemplate": "docker",
       "depNameTemplate": "vaultwarden/server"

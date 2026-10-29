@@ -1,39 +1,18 @@
 #!/usr/bin/env python3
 
 #
-# Copyright (C) 2024 Nethesis S.r.l.
+# Copyright (C) 2026 BLS-ISP
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-import glob
 import json
 import os
-import shutil
 import sys
 import agent
 import agent.tasks
 
 request = json.load(sys.stdin)
 renv = request.get("environment", {})
-
-# If an online VACUUM INTO SQLite snapshot (db_YYYYMMDD_HHMMSS.sqlite3) exists in the restored volume,
-# promote the latest snapshot to db.sqlite3 and clean up any stale WAL/SHM files.
-vol_data_dir = os.path.expanduser("~/.local/share/containers/storage/volumes/vaultwarden-data/_data")
-if os.path.isdir(vol_data_dir):
-    snapshots = sorted(glob.glob(os.path.join(vol_data_dir, "db_*.sqlite3")))
-    if snapshots:
-        latest_snap = snapshots[-1]
-        target_db = os.path.join(vol_data_dir, "db.sqlite3")
-        try:
-            shutil.copy2(latest_snap, target_db)
-            for wal_ext in ("-wal", "-shm"):
-                wal_path = target_db + wal_ext
-                if os.path.exists(wal_path):
-                    os.remove(wal_path)
-            for snap in snapshots:
-                os.remove(snap)
-        except Exception as ex:
-            print(f"Warning: could not promote SQLite snapshot {latest_snap}: {ex}", file=sys.stderr)
 
 host = renv.get("HOST") or os.environ.get("HOST", "")
 if host:
@@ -42,31 +21,63 @@ if host:
     except ValueError:
         ldap_sync_interval = 3600
 
+    push_relay_uri = (
+        renv.get("PUSH_RELAY_URI")
+        or os.environ.get("PUSH_RELAY_URI")
+        or "https://push.bitwarden.com"
+    )
+    default_identity_uri = (
+        "https://identity.bitwarden.eu"
+        if push_relay_uri.rstrip("/").endswith(".eu")
+        else "https://identity.bitwarden.com"
+    )
+    push_identity_uri = (
+        renv.get("PUSH_IDENTITY_URI")
+        or os.environ.get("PUSH_IDENTITY_URI")
+        or default_identity_uri
+    )
+
     configure_retval = agent.tasks.run(
         agent_id=os.environ["AGENT_ID"],
         action="configure-module",
         data={
             "host": host,
-            "http2https": renv.get("HTTP2HTTPS", "True") == "True",
-            "lets_encrypt": renv.get("LETS_ENCRYPT", "False") == "True",
-            "admin_enabled": renv.get("ADMIN_ENABLED", "True") == "True",
+            "http2https": renv.get("HTTP2HTTPS", os.environ.get("HTTP2HTTPS", "True")) == "True",
+            "lets_encrypt": renv.get("LETS_ENCRYPT", os.environ.get("LETS_ENCRYPT", "False")) == "True",
+            "admin_enabled": renv.get("ADMIN_ENABLED", os.environ.get("ADMIN_ENABLED", "True")) == "True",
             "admin_password": "",
-            "signups_allowed": renv.get("SIGNUPS_ALLOWED", "False") == "True",
-            "signups_verify": renv.get("SIGNUPS_VERIFY", "False") == "True",
-            "signups_domains_whitelist": renv.get("SIGNUPS_DOMAINS_WHITELIST", ""),
-            "invitations_allowed": renv.get("INVITATIONS_ALLOWED", "True") == "True",
-            "show_password_hint": renv.get("SHOW_PASSWORD_HINT", "False") == "True",
-            "sends_allowed": renv.get("SENDS_ALLOWED", "True") == "True",
-            "emergency_access_allowed": renv.get("EMERGENCY_ACCESS_ALLOWED", "True") == "True",
-            "org_events_enabled": renv.get("ORG_EVENTS_ENABLED", "False") == "True",
-            "smtp_from": renv.get("SMTP_FROM", ""),
-            "ldap_domain": renv.get("LDAP_DOMAIN", ""),
+            "signups_allowed": renv.get("SIGNUPS_ALLOWED", os.environ.get("SIGNUPS_ALLOWED", "False")) == "True",
+            "signups_verify": renv.get("SIGNUPS_VERIFY", os.environ.get("SIGNUPS_VERIFY", "False")) == "True",
+            "signups_domains_whitelist": renv.get(
+                "SIGNUPS_DOMAINS_WHITELIST", os.environ.get("SIGNUPS_DOMAINS_WHITELIST", "")
+            ),
+            "invitations_allowed": renv.get(
+                "INVITATIONS_ALLOWED", os.environ.get("INVITATIONS_ALLOWED", "True")
+            ) == "True",
+            "show_password_hint": renv.get(
+                "SHOW_PASSWORD_HINT", os.environ.get("SHOW_PASSWORD_HINT", "False")
+            ) == "True",
+            "web_vault_enabled": renv.get(
+                "WEB_VAULT_ENABLED", os.environ.get("WEB_VAULT_ENABLED", "True")
+            ) == "True",
+            "sends_allowed": renv.get("SENDS_ALLOWED", os.environ.get("SENDS_ALLOWED", "True")) == "True",
+            "emergency_access_allowed": renv.get(
+                "EMERGENCY_ACCESS_ALLOWED", os.environ.get("EMERGENCY_ACCESS_ALLOWED", "True")
+            ) == "True",
+            "org_events_enabled": renv.get(
+                "ORG_EVENTS_ENABLED", os.environ.get("ORG_EVENTS_ENABLED", "False")
+            ) == "True",
+            "smtp_from": renv.get("SMTP_FROM", os.environ.get("SMTP_FROM", "")),
+            "ldap_domain": renv.get("LDAP_DOMAIN", os.environ.get("LDAP_DOMAIN", "")),
             "ldap_sync_interval": ldap_sync_interval,
-            "ldap_search_filter": renv.get("LDAP_SEARCH_FILTER", ""),
-            "push_enabled": renv.get("PUSH_ENABLED", "False") == "True",
-            "push_installation_id": renv.get("PUSH_INSTALLATION_ID", ""),
-            "push_installation_key": renv.get("PUSH_INSTALLATION_KEY", ""),
-            "push_relay_uri": renv.get("PUSH_RELAY_URI", "https://push.bitwarden.com"),
+            "ldap_search_filter": renv.get("LDAP_SEARCH_FILTER", os.environ.get("LDAP_SEARCH_FILTER", "")),
+            "push_enabled": renv.get("PUSH_ENABLED", os.environ.get("PUSH_ENABLED", "False")) == "True",
+            "push_installation_id": renv.get(
+                "PUSH_INSTALLATION_ID", os.environ.get("PUSH_INSTALLATION_ID", "")
+            ),
+            "push_installation_key": "",
+            "push_relay_uri": push_relay_uri,
+            "push_identity_uri": push_identity_uri,
         },
     )
     agent.assert_exp(configure_retval["exit_code"] == 0, "The configure-module subtask failed!")

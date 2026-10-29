@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 #
-# Copyright (C) 2023 Nethesis S.r.l.
+# Copyright (C) 2026 BLS-ISP
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 import json
-import sys
 import os
+import sys
 import agent
 from agent.ldapproxy import Ldapproxy
 
@@ -17,8 +17,15 @@ env = dict(os.environ)
 if os.path.exists("environment"):
     try:
         env.update(agent.read_envfile("environment"))
-    except Exception:
-        pass
+    except Exception as ex:
+        print(agent.SD_WARNING + f"Failed to read environment file: {ex}", file=sys.stderr)
+
+stored_secrets = {}
+if os.path.exists("secrets.env"):
+    try:
+        stored_secrets = agent.read_envfile("secrets.env")
+    except Exception as ex:
+        print(agent.SD_WARNING + f"Failed to read secrets.env: {ex}", file=sys.stderr)
 
 try:
     ldap_sync_interval = int(env.get("LDAP_SYNC_INTERVAL") or 3600)
@@ -29,7 +36,7 @@ config["host"] = env.get("HOST", "")
 config["http2https"] = env.get("HTTP2HTTPS", "True") == "True"
 config["lets_encrypt"] = env.get("LETS_ENCRYPT", "False") == "True"
 config["admin_enabled"] = env.get("ADMIN_ENABLED", "True") == "True"
-config["has_admin_password"] = bool(env.get("ADMIN_PASSWORD", ""))
+config["has_admin_password"] = bool(stored_secrets.get("ADMIN_PASSWORD") or env.get("ADMIN_PASSWORD", ""))
 config["signups_allowed"] = env.get("SIGNUPS_ALLOWED", "False") == "True"
 config["signups_verify"] = env.get("SIGNUPS_VERIFY", "False") == "True"
 config["signups_domains_whitelist"] = env.get("SIGNUPS_DOMAINS_WHITELIST", "")
@@ -45,7 +52,9 @@ config["ldap_sync_interval"] = ldap_sync_interval
 config["ldap_search_filter"] = env.get("LDAP_SEARCH_FILTER", "")
 config["push_enabled"] = env.get("PUSH_ENABLED", "False") == "True"
 config["push_installation_id"] = env.get("PUSH_INSTALLATION_ID", "")
-config["push_installation_key"] = env.get("PUSH_INSTALLATION_KEY", "")
+config["has_push_installation_key"] = bool(
+    stored_secrets.get("PUSH_INSTALLATION_KEY") or env.get("PUSH_INSTALLATION_KEY", "")
+)
 config["push_relay_uri"] = env.get("PUSH_RELAY_URI", "https://push.bitwarden.com")
 default_identity_uri = (
     "https://identity.bitwarden.eu"
@@ -62,8 +71,8 @@ try:
     smtp_settings = agent.get_smarthost_settings(rdb) or {}
     smarthost_enabled = bool(smtp_settings.get("enabled") and smtp_settings.get("host"))
     smarthost_host = str(smtp_settings.get("host") or "")
-except Exception:
-    pass
+except Exception as ex:
+    print(agent.SD_WARNING + f"Failed to read smarthost settings from Redis: {ex}", file=sys.stderr)
 
 config["smarthost_enabled"] = smarthost_enabled
 config["smarthost_host"] = smarthost_host
@@ -77,8 +86,8 @@ try:
             "label": key,
             "value": key,
         })
-except Exception:
-    pass
+except Exception as ex:
+    print(agent.SD_WARNING + f"Failed to list user domains from Ldapproxy: {ex}", file=sys.stderr)
 
 config["ldap_domain_list"] = domains
 

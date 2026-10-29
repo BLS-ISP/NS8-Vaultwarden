@@ -2,12 +2,8 @@ name: "Publish images"
 
 on:
   push:
-    branches-ignore:
-      - "renovate/**"
-      - "repomd"
     tags:
-      - "**"
-  workflow_dispatch:
+      - "[0-9]+.[0-9]+.[0-9]+*"
 
 permissions:
   packages: write
@@ -47,7 +43,7 @@ jobs:
 
   trivy:
     needs: module
-    if: ${{ needs.module.outputs.release == 'stable' || needs.module.outputs.release == 'latest' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.module.outputs.release == 'stable' || needs.module.outputs.release == 'latest' }}
     uses: NethServer/ns8-github-actions/.github/workflows/scan-with-trivy.yml@v1
     with:
       images: ${{ needs.module.outputs.images }}
@@ -55,11 +51,45 @@ jobs:
   repomd:
     name: "Update NS8 Software Repository (repomd)"
     needs: [publish-images, module]
-    if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Remove non-SemVer tags (main, latest) from GHCR if present
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODULE_OWNER: ${{ needs.module.outputs.owner }}
+          MODULE_NAME: ${{ needs.module.outputs.name }}
+        run: |
+          python3 - <<'EOF' || true
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+
+          SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:-.+)?$")
+          owner = os.environ["MODULE_OWNER"]
+          name = os.environ["MODULE_NAME"]
+          for endpoint in (
+              f"/orgs/{owner}/packages/container/{name}/versions?per_page=100",
+              f"/users/{owner}/packages/container/{name}/versions?per_page=100",
+          ):
+              proc = subprocess.run(["gh", "api", endpoint], capture_output=True, text=True)
+              if proc.returncode != 0:
+                  continue
+              versions = json.loads(proc.stdout)
+              for v in versions:
+                  tags = ((v.get("metadata") or {}).get("container") or {}).get("tags") or []
+                  if tags and not any(SEMVER_RE.match(t) for t in tags):
+                      vid = v["id"]
+                      del_ep = endpoint.split("?")[0] + f"/{vid}"
+                      print(f"Deleting non-SemVer package version {vid} (tags={tags})...", file=sys.stderr)
+                      subprocess.run(["gh", "api", "-X", "DELETE", del_ep], check=False)
+              break
+          EOF
 
       - name: Generate repodata.json from SemVer tags (NethServer standard)
         env:
@@ -92,7 +122,6 @@ jobs:
                   return None
               major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
               prerelease = m.group(4)
-              # Stable releases (prerelease is None) sort higher than prereleases of the same X.Y.Z
               is_stable = 1 if prerelease is None else 0
               return (major, minor, patch, is_stable, prerelease or "")
 
@@ -104,13 +133,8 @@ jobs:
 
           proc = subprocess.run(
               ["skopeo", "inspect", f"docker://{source}:{current_tag}"],
-              capture_output=True, text=True
+              capture_output=True, text=True, check=True
           )
-          if proc.returncode != 0:
-              proc = subprocess.run(
-                  ["skopeo", "inspect", f"docker://{source}:latest"],
-                  capture_output=True, text=True, check=True
-              )
 
           repo_inspect = json.loads(proc.stdout)
           repo_tags = repo_inspect.get("RepoTags", [])
