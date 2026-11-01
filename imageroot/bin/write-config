@@ -20,12 +20,33 @@ def toml_str(value: str) -> str:
     return json.dumps(str(value))
 
 
-def generate_argon2_hash(password: str, server_image: str) -> str:
-    """Generate an Argon2id PHC string using the Vaultwarden binary."""
+def generate_argon2_hash(password: str, server_image: str = "") -> str:
+    """Generate an Argon2id PHC string (OWASP preset: m=19456, t=2, p=1)."""
     if not password:
         return ""
     if password.startswith("$argon2"):
         return password
+
+    # Primary implementation: native Argon2id via NS8's cryptography package (no container/TTY required)
+    try:
+        from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
+
+        kdf = Argon2id(
+            salt=os.urandom(16),
+            length=32,
+            iterations=2,
+            lanes=1,
+            memory_cost=19456,
+        )
+        phc = kdf.derive_phc_encoded(password.encode("utf-8"))
+        if phc.startswith("$argon2"):
+            return phc
+    except Exception as ex:
+        print(
+            agent.SD_WARNING + f"Native Argon2id hashing failed, falling back to Vaultwarden CLI: {ex}",
+            file=sys.stderr,
+        )
+
     agent.assert_exp(bool(server_image), "SERVER_IMAGE is not defined; cannot hash admin password")
 
     try:
@@ -157,15 +178,17 @@ if (
     or stored_secrets.get("PUSH_INSTALLATION_KEY") != push_installation_key
 ):
     try:
+        secrets_tmp = f".secrets.env-{os.getpid()}.tmp"
         agent.write_envfile(
-            secrets_path,
+            secrets_tmp,
             {
                 "ADMIN_PASSWORD": admin_password,
                 "ADMIN_TOKEN_HASH": admin_token_hash,
                 "PUSH_INSTALLATION_KEY": push_installation_key,
             },
         )
-        os.chmod(secrets_path, 0o600)
+        os.chmod(secrets_tmp, 0o600)
+        os.replace(secrets_tmp, secrets_path)
     except Exception as ex:
         print(agent.SD_WARNING + f"Failed to write {secrets_path}: {ex}", file=sys.stderr)
 

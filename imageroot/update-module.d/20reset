@@ -45,10 +45,12 @@ EOF
 systemctl --user daemon-reload
 
 if systemctl --user is-enabled --quiet vaultwarden.service; then
+    ../bin/write-config
     if [[ -n "${LDAP_DOMAIN}" ]]; then
         systemctl --user enable vaultwarden-ldap.service
         systemctl --user restart vaultwarden.service vaultwarden-app.service vaultwarden-ldap.service
     else
+        systemctl --user disable --now vaultwarden-ldap.service 2>/dev/null || true
         systemctl --user restart vaultwarden.service vaultwarden-app.service
     fi
 fi
