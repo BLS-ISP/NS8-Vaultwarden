@@ -5,7 +5,7 @@
 
 [Unit]
 Description=Vaultwarden Pod
-Requires=vaultwarden-app.service
+Wants=vaultwarden-app.service
 Before=vaultwarden-app.service vaultwarden-ldap.service
 
 [Service]

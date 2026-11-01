@@ -32,7 +32,7 @@ def generate_argon2_hash(password: str, server_image: str) -> str:
         import pty
         master_fd, slave_fd = pty.openpty()
         proc = subprocess.Popen(
-            ["podman", "run", "--rm", "-i", "--entrypoint", "/vaultwarden", server_image, "hash", "--preset", "owasp"],
+            ["podman", "run", "--rm", "-it", "--entrypoint", "/vaultwarden", server_image, "hash", "--preset", "owasp"],
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
@@ -143,23 +143,39 @@ effective_admin_enabled = admin_enabled or bool(ldap_domain)
 
 effective_admin_token = ""
 if effective_admin_enabled and admin_password:
-    if admin_token_hash:
+    if admin_token_hash and admin_token_hash.startswith("$argon2"):
         effective_admin_token = admin_token_hash
     else:
         effective_admin_token = generate_argon2_hash(admin_password, server_image)
-        if effective_admin_token.startswith("$argon2"):
-            try:
-                agent.write_envfile(
-                    secrets_path,
-                    {
-                        "ADMIN_PASSWORD": admin_password,
-                        "ADMIN_TOKEN_HASH": effective_admin_token,
-                        "PUSH_INSTALLATION_KEY": push_installation_key,
-                    },
-                )
-                os.chmod(secrets_path, 0o600)
-            except Exception as ex:
-                print(agent.SD_WARNING + f"Failed to cache ADMIN_TOKEN_HASH in {secrets_path}: {ex}", file=sys.stderr)
+        admin_token_hash = effective_admin_token
+
+# Ensure secrets are persisted in secrets.env (0600) and scrubbed from legacy environment
+if (
+    not os.path.exists(secrets_path)
+    or stored_secrets.get("ADMIN_PASSWORD") != admin_password
+    or stored_secrets.get("ADMIN_TOKEN_HASH") != admin_token_hash
+    or stored_secrets.get("PUSH_INSTALLATION_KEY") != push_installation_key
+):
+    try:
+        agent.write_envfile(
+            secrets_path,
+            {
+                "ADMIN_PASSWORD": admin_password,
+                "ADMIN_TOKEN_HASH": admin_token_hash,
+                "PUSH_INSTALLATION_KEY": push_installation_key,
+            },
+        )
+        os.chmod(secrets_path, 0o600)
+    except Exception as ex:
+        print(agent.SD_WARNING + f"Failed to write {secrets_path}: {ex}", file=sys.stderr)
+
+if any(k in env for k in ("ADMIN_PASSWORD", "ADMIN_TOKEN_HASH", "PUSH_INSTALLATION_KEY")):
+    try:
+        for legacy_key in ("ADMIN_PASSWORD", "ADMIN_TOKEN_HASH", "PUSH_INSTALLATION_KEY"):
+            agent.unset_env(legacy_key)
+        agent.dump_env()
+    except Exception as ex:
+        print(agent.SD_WARNING + f"Failed to scrub legacy secrets from environment: {ex}", file=sys.stderr)
 
 smtp_settings = {}
 try:
