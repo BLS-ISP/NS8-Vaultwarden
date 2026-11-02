@@ -35,7 +35,8 @@ except ValueError:
 config["host"] = env.get("HOST", "")
 config["http2https"] = env.get("HTTP2HTTPS", "True") == "True"
 config["lets_encrypt"] = env.get("LETS_ENCRYPT", "False") == "True"
-config["admin_enabled"] = env.get("ADMIN_ENABLED", "True") == "True"
+config["ldap_domain"] = env.get("LDAP_DOMAIN", "")
+config["admin_enabled"] = (env.get("ADMIN_ENABLED", "True") == "True") or bool(config["ldap_domain"])
 config["has_admin_password"] = bool(stored_secrets.get("ADMIN_PASSWORD") or env.get("ADMIN_PASSWORD", ""))
 config["signups_allowed"] = env.get("SIGNUPS_ALLOWED", "False") == "True"
 config["signups_verify"] = env.get("SIGNUPS_VERIFY", "False") == "True"

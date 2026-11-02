@@ -97,11 +97,18 @@
             <NsToggle
               :label="$t('settings.admin_enabled')"
               value="admin_enabled"
-              :form-item="true"
+              :form-item="!ldap_domain"
               v-model="admin_enabled"
-              :disabled="loading.getConfiguration || loading.configureModule"
+              :disabled="
+                loading.getConfiguration ||
+                loading.configureModule ||
+                Boolean(ldap_domain)
+              "
               ref="admin_enabled"
             >
+              <template v-if="ldap_domain" slot="tooltip">
+                <span>{{ $t("settings.admin_required_by_ldap") }}</span>
+              </template>
               <template slot="text-left">{{
                 $t("settings.disabled")
               }}</template>
@@ -109,6 +116,12 @@
                 $t("settings.enabled")
               }}</template>
             </NsToggle>
+            <div
+              v-if="ldap_domain"
+              class="bx--form__helper-text mg-bottom-md"
+            >
+              {{ $t("settings.admin_required_by_ldap") }}
+            </div>
             <NsTextInput
               v-if="admin_enabled || ldap_domain"
               :label="$t('settings.admin_password')"
@@ -450,6 +463,7 @@ export default {
       lets_encrypt: false,
       http2https: true,
       admin_enabled: true,
+      admin_enabled_before_ldap: true,
       admin_password: "",
       signups_allowed: false,
       signups_verify: false,
@@ -508,6 +522,18 @@ export default {
   },
   computed: {
     ...mapState(["instanceName", "core", "appName"]),
+  },
+  watch: {
+    ldap_domain(newVal, oldVal) {
+      if (newVal) {
+        if (!oldVal) {
+          this.admin_enabled_before_ldap = this.admin_enabled;
+        }
+        this.admin_enabled = true;
+      } else if (oldVal) {
+        this.admin_enabled = this.admin_enabled_before_ldap;
+      }
+    },
   },
   beforeRouteEnter(to, from, next) {
     next((vm) => {
@@ -572,10 +598,12 @@ export default {
       this.lets_encrypt = Boolean(config.lets_encrypt);
       this.http2https =
         config.http2https !== undefined ? Boolean(config.http2https) : true;
-      this.admin_enabled =
+      const rawAdminEnabled =
         config.admin_enabled !== undefined
           ? Boolean(config.admin_enabled)
           : true;
+      this.admin_enabled_before_ldap = rawAdminEnabled;
+      this.admin_enabled = Boolean(config.ldap_domain) || rawAdminEnabled;
       this.admin_password = "";
       this.signups_allowed = Boolean(config.signups_allowed);
       this.signups_verify = Boolean(config.signups_verify);
@@ -767,7 +795,7 @@ export default {
             host: this.host,
             http2https: this.http2https,
             lets_encrypt: this.lets_encrypt,
-            admin_enabled: this.admin_enabled,
+            admin_enabled: Boolean(this.ldap_domain) || this.admin_enabled,
             admin_password: this.admin_password || "",
             signups_allowed: this.signups_allowed,
             signups_verify: this.signups_verify,

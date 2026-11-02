@@ -26,6 +26,7 @@
         "smarthost_active_title": "NS8 Smarthost / SMTP Active",
         "smarthost_active_description": "Outgoing emails (invitations, 2FA, hints) are automatically routed via the NethServer 8 Smarthost ({host}).",
         "admin_enabled": "Enable Admin Panel (/admin)",
+        "admin_required_by_ldap": "Required by LDAP synchronization",
         "admin_password": "Admin Password / Token (optional)",
         "admin_password_helper": "Minimum 8 characters (automatically hashed with Argon2id PHC). Leave empty to keep the existing admin password.",
         "password_too_short": "Password must be at least 8 characters long",

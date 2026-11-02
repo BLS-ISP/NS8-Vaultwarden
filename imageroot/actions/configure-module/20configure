@@ -32,6 +32,8 @@ org_events_enabled = bool(data.get("org_events_enabled", False))
 smtp_from = (data.get("smtp_from") or "").strip()
 
 ldap_domain = (data.get("ldap_domain") or "").strip()
+if ldap_domain:
+    admin_enabled = True
 try:
     ldap_sync_interval = max(60, int(data.get("ldap_sync_interval") or 3600))
 except (ValueError, TypeError):
