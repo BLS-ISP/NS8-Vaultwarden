@@ -15,7 +15,7 @@ data = json.load(sys.stdin)
 
 # Unbind LDAP user domains
 try:
-    agent.unbind_user_domains()
+    agent.bind_user_domains([])
 except Exception as ex:
     print(agent.SD_WARNING + f"Failed to unbind LDAP user domains: {ex}", file=sys.stderr)
 
