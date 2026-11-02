@@ -18,7 +18,7 @@ Check if vaultwarden configuration can be read
     ${output}  ${rc} =    Execute Command    api-cli run module/${module_id}/get-configuration
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}  0
-    &{config} =    Evaluate    ${output}
+    &{config} =    Evaluate    json.loads('''${output}''')    modules=json
     Should Be Equal As Strings    ${config.host}    vault.example.org
     Should Be Equal    ${config.admin_enabled}    ${True}
 
