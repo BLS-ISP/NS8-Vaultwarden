@@ -57,40 +57,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Remove non-SemVer tags (main, latest) from GHCR if present
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MODULE_OWNER: ${{ needs.module.outputs.owner }}
-          MODULE_NAME: ${{ needs.module.outputs.name }}
-        run: |
-          python3 - <<'EOF' || true
-          import json
-          import os
-          import re
-          import subprocess
-          import sys
-
-          SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:-.+)?$")
-          owner = os.environ["MODULE_OWNER"]
-          name = os.environ["MODULE_NAME"]
-          for endpoint in (
-              f"/orgs/{owner}/packages/container/{name}/versions?per_page=100",
-              f"/users/{owner}/packages/container/{name}/versions?per_page=100",
-          ):
-              proc = subprocess.run(["gh", "api", endpoint], capture_output=True, text=True)
-              if proc.returncode != 0:
-                  continue
-              versions = json.loads(proc.stdout)
-              for v in versions:
-                  tags = ((v.get("metadata") or {}).get("container") or {}).get("tags") or []
-                  if tags and not any(SEMVER_RE.match(t) for t in tags):
-                      vid = v["id"]
-                      del_ep = endpoint.split("?")[0] + f"/{vid}"
-                      print(f"Deleting non-SemVer package version {vid} (tags={tags})...", file=sys.stderr)
-                      subprocess.run(["gh", "api", "-X", "DELETE", del_ep], check=False)
-              break
-          EOF
-
       - name: Generate repodata.json from SemVer tags (NethServer standard)
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -102,6 +68,11 @@ jobs:
           sudo apt-get update -q && sudo apt-get install -y -q skopeo jq
           trap 'skopeo logout ghcr.io || true' EXIT
           skopeo login -u "${REGISTRY_USER}" --password-stdin ghcr.io <<<"${REGISTRY_TOKEN}"
+
+          # Point :latest to the newest stable SemVer release so createrepo.py can inspect the repository
+          if [[ "${CURRENT_TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            skopeo copy "docker://ghcr.io/${MODULE_OWNER}/${MODULE_NAME}:${CURRENT_TAG}" "docker://ghcr.io/${MODULE_OWNER}/${MODULE_NAME}:latest"
+          fi
 
           python3 - <<'EOF'
           import json
@@ -164,6 +135,10 @@ jobs:
               })
 
               if not is_prerelease:
+                  subprocess.run(
+                      ["skopeo", "copy", f"docker://{source}:{tag}", f"docker://{source}:latest"],
+                      check=True
+                  )
                   break
               else:
                   testing_found = True
