@@ -11,7 +11,7 @@
 
 ## Features
 
-- **Vaultwarden (`1.37.4`)** running in a rootless Podman pod behind the NS8 Traefik reverse proxy (including WebSocket support)
+- **Vaultwarden (`1.37.5`)** running in a rootless Podman pod behind the NS8 Traefik reverse proxy (including WebSocket support)
 - **Let's Encrypt & HTTP-to-HTTPS redirect** configurable via the NS8 Web UI
 - **Admin Panel (`/admin`) & Argon2id PHC hashing** (toggleable in the NS8 Web UI; plaintext admin passwords entered in the UI are automatically converted to an Argon2id PHC `ADMIN_TOKEN` via `/vaultwarden hash`)
 - **Registration & Security Policies** (`SIGNUPS_ALLOWED`, `SIGNUPS_VERIFY`, `SIGNUPS_DOMAINS_WHITELIST`, `INVITATIONS_ALLOWED`, `SENDS_ALLOWED`, `EMERGENCY_ACCESS_ALLOWED`, `ORG_EVENTS_ENABLED`, `SHOW_PASSWORD_HINT`) directly manageable from the NS8 Web UI
@@ -117,7 +117,7 @@ api-cli run module/vaultwarden1/configure-module --data '{
 ### Systemd User Units (`imageroot/systemd/user/`)
 
 - `vaultwarden.service`: Manages the rootless Podman pod (`vaultwarden`) with port mapping `127.0.0.1:${TCP_PORT}:80` and `--network=slirp4netns:allow_host_loopback=true`.
-- `vaultwarden-app.service`: Runs the `docker.io/vaultwarden/server:1.37.4` (`${SERVER_IMAGE}`) container inside the pod. Executes `../bin/write-config` prior to startup to render `state/vaultwarden.env` from the module environment and Redis smarthost settings.
+- `vaultwarden-app.service`: Runs the `docker.io/vaultwarden/server:1.37.5` (`${SERVER_IMAGE}`) container inside the pod. Executes `../bin/write-config` prior to startup to render `state/vaultwarden.env` from the module environment and Redis smarthost settings.
 - `vaultwarden-ldap.service`: Optional container (`docker.io/vividboarder/vaultwarden_ldap:2.2.1`, `${VAULTWARDEN_LDAP_IMAGE}`) inside the pod that queries the bound NS8 `Ldapproxy` domain (`10.0.2.2:<port>`) using `state/ldap_config.toml` and automatically sends Vaultwarden invitations to discovered LDAP/AD users via `http://127.0.0.1:80/admin/invite`.
 
 ### Persistent Volumes (`imageroot/etc/state-include.conf` & `org.nethserver.volumes`)
