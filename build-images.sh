@@ -41,7 +41,7 @@ buildah config --entrypoint=/ \
     --label="org.nethserver.rootfull=0" \
     --label="org.nethserver.min-core=3.0.0" \
     --label="org.nethserver.volumes=vaultwarden-data" \
-    --label="org.nethserver.images=docker.io/vaultwarden/server:1.37.4 docker.io/vividboarder/vaultwarden_ldap:2.2.1" \
+    --label="org.nethserver.images=docker.io/vaultwarden/server:1.37.5 docker.io/vividboarder/vaultwarden_ldap:2.2.1" \
     "${container}"
 # Commit the image
 buildah commit "${container}" "${repobase}/${reponame}"
